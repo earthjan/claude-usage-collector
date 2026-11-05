@@ -1,0 +1,14 @@
+#!/bin/sh
+# Resolve symlinks by hand so the wrapper works when linked into ~/.local/bin.
+self=$0
+while [ -L "$self" ]; do
+    target=$(readlink "$self")
+    case $target in
+        /*) self=$target ;;
+        *) self=$(dirname "$self")/$target ;;
+    esac
+done
+repo=$(cd "$(dirname "$self")/.." && pwd)
+PYTHONPATH="$repo${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH
+exec "${CLAUDE_USAGE_PYTHON:-python3}" -m usage_collector "$@"

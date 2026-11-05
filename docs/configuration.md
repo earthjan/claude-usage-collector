@@ -1,0 +1,140 @@
+# Configuration
+
+**One JSON file per machine holds every setting. `init` writes it for you,
+and the defaults suit most people.** You only need to edit it to add a
+transcript folder, switch to a git store, or tune privacy and analysis.
+
+## Where the files are
+
+The config is found in this order:
+
+1. `--config PATH`, given before the command: `claude-usage --config ~/alt.json collect`
+2. the `CLAUDE_USAGE_CONFIG` environment variable
+3. `~/.config/claude-usage-collector/config.json`
+
+The salt (`salt`) and the state file (`state.json`) live in the same folder
+as the config. A second config in another folder therefore has its own salt
+and its own read positions.
+
+## Creating it
+
+```sh
+claude-usage init --account work
+claude-usage init --account work --dest-type git --dest ~/usage-data --schedule 07:30
+```
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--account LABEL` | required | Account label written into every row. |
+| `--dest-type folder\|git` | `folder` | Plain folder, or a clone of a git repo. |
+| `--dest PATH` | `~/usage-data` | Where the store lives. |
+| `--schedule HH:MM` | `18:00` | Daily run time, read by `install/install.sh`. |
+| `--force` | off | Replace an existing config. The existing salt is kept, so hashes do not change. |
+
+## A full example
+
+This is what `init --account work` writes (shown compactly):
+
+```json
+{
+  "machine_label": null,
+  "sources": ["~/.claude/projects"],
+  "round_ts_to_hour": false,
+  "hash_agent_types": false,
+  "crosscheck": {"command": "ccusage", "enabled": true},
+  "account": "work",
+  "destination": {"type": "folder", "path": "~/usage-data"},
+  "schedule": "18:00"
+}
+```
+
+A git store looks like this:
+
+```json
+"destination": {
+  "type": "git",
+  "path": "~/usage-data",
+  "remote": "origin",
+  "branch": "main",
+  "push": true
+}
+```
+
+## Every key
+
+| Key | Default | Meaning |
+|---|---|---|
+| `account` | none, required | Label for this account in every row. Must be a slug: starts with a letter or digit, then letters, digits, `.`, `_`, `:`, `-`, no spaces, at most 64 characters (see [schema.md](schema.md#value-rules)). |
+| `machine_label` | `null` | When `null`, the `machine` column is a salted hash of the hostname. Set a slug such as `laptop` to use that instead. It is written as is, so keep it neutral. |
+| `sources` | `["~/.claude/projects"]` | Folders that hold Claude Code project transcripts. Add one per Claude Code config folder you use. |
+| `destination.type` | `"folder"` | `folder` or `git`. |
+| `destination.path` | `"~/usage-data"` | The store folder. For `git`, a clone of your private data repo. |
+| `destination.remote` | `"origin"` | Git only: remote to pull from and push to. |
+| `destination.branch` | `"main"` | Git only: branch to pull from and push to. |
+| `destination.push` | `true` | Git only: set `false` to commit locally without pushing. |
+| `round_ts_to_hour` | `false` | Round every timestamp down to the hour, to hide exact working times. |
+| `hash_agent_types` | `false` | Hash every agent type, so plugin and custom agent names are hidden. Turn it on if you define agents named after projects or clients. |
+| `schedule` | `"18:00"` | Daily run time in 24 hour `HH:MM`. Used by `install/install.sh`. |
+| `crosscheck.command` | `"ccusage"` | Command to run for the monthly cross-check. Can be a full path. It is pointed at this config's `sources`, which must each end in `projects`. |
+| `crosscheck.enabled` | `true` | Set `false` to skip the monthly cross-check. |
+| `weights` | see below | Multipliers for the weighted usage figure in `analyze` and `report`. |
+| `prices` | `{}` | Dollar prices per million tokens, keyed by model prefix. Empty by default. |
+
+`weights` and `prices` are not written by `init`. Add them by hand when you
+want them. Both are explained in [analysis.md](analysis.md).
+
+```json
+"weights": {"input": 1, "cache_read": 0.1, "cache_write": 2, "output": 5}
+```
+
+## Changing settings later
+
+- **Schedule:** edit `schedule`, then run `install/install.sh` again, or
+  pass `install/install.sh --schedule HH:MM`. The launchd agent only picks up
+  a new time on install.
+- **Privacy switches:** `round_ts_to_hour`, `hash_agent_types` and
+  `machine_label` apply to new rows only. Rows already in the store keep
+  their old form.
+- **Account label:** applies to new rows only, and they go into a new
+  account folder.
+
+`claude-usage doctor` loads and validates the config, including
+`crosscheck`, `weights` and `prices`, so run it after any hand edit.
+
+## Installer options
+
+```sh
+install/install.sh [--schedule HH:MM] [--python /abs/path/to/python3] [--uninstall]
+```
+
+- It links `~/.local/bin/claude-usage` to the repo's wrapper. Make sure
+  `~/.local/bin` is on your `PATH`.
+- On macOS it writes `~/Library/LaunchAgents/io.github.claude-usage-collector.plist`
+  and loads it. The agent runs `<python> -m usage_collector run` at the
+  schedule time and logs to `~/Library/Logs/claude-usage-collector.log`.
+- `--python` sets the interpreter. Without it, `/usr/bin/python3` is used
+  when present.
+- Running it again replaces what the last run installed.
+- `--uninstall` unloads and removes the agent, and removes the link if it
+  points at this repo. It says what it removed and what it kept. Your
+  config, salt, state and log are always kept.
+- Set `CLAUDE_USAGE_SKIP_LAUNCHCTL=1` to write or remove the plist without
+  calling `launchctl`, for example when testing with a different `HOME`.
+- The agent is given the config path from `CLAUDE_USAGE_CONFIG` at install
+  time, or the default path.
+- The `bin/claude-usage` wrapper itself runs `python3` from your `PATH`.
+  Set `CLAUDE_USAGE_PYTHON` to an interpreter path to use another one, for
+  example `CLAUDE_USAGE_PYTHON=/usr/bin/python3`.
+
+## Transcript retention
+
+**Claude Code deletes transcripts older than `cleanupPeriodDays` (30 days
+by default).** This is a Claude Code setting, not a setting of this tool,
+but it decides how much history can be collected. Set it in
+`~/.claude/settings.json`:
+
+```json
+{"cleanupPeriodDays": 365}
+```
+
+`claude-usage doctor` warns when it is unset or below 90.

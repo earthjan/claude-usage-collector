@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="268" viewBox="0 0 960 268" role="img" aria-labelledby="title desc">
+  <title id="title">Daily run pipeline</title>
+  <desc id="desc">claude-usage run reads new transcript lines, extracts allowlisted fields, guards every column, writes day files, then pushes. A guard failure writes nothing.</desc>
+  <style>
+    .bg { fill: #f6f8fa; }
+    .card { fill: #ffffff; stroke: #d0d7de; stroke-width: 1; }
+    .blue { fill: #ddf4ff; stroke: #54aeff; stroke-width: 1; }
+    .green { fill: #dafbe1; stroke: #4ac26b; stroke-width: 1; }
+    .orange { fill: #fff1e5; stroke: #fb8f44; stroke-width: 1; }
+    .purple { fill: #fbefff; stroke: #c297ff; stroke-width: 1; }
+    .red { fill: #ffebe9; stroke: #ff8182; stroke-width: 1; }
+    .ink { fill: #59636e; }
+    text { fill: #1f2328; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 13px; }
+    .h { font-size: 15px; font-weight: 600; }
+    .b { font-weight: 600; }
+    .s { font-size: 12px; fill: #59636e; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .num { fill: #ffffff; font-size: 12px; font-weight: 600; }
+    .line { stroke: #8c959f; stroke-width: 1.5; fill: none; }
+    .line-blue { stroke: #0969da; stroke-width: 1.5; fill: none; }
+    .line-purple { stroke: #8250df; stroke-width: 1.5; fill: none; stroke-dasharray: 5 4; }
+    .line-red { stroke: #cf222e; stroke-width: 1.5; fill: none; stroke-dasharray: 5 4; }
+    .a-grey { fill: #8c959f; }
+    .a-blue { fill: #0969da; }
+    .a-purple { fill: #8250df; }
+    .a-red { fill: #cf222e; }
+    .dot-blue { fill: #0969da; }
+    .dot-green { fill: #1a7f37; }
+    .dot-orange { fill: #bc4c00; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #0d1117; }
+      .card { fill: #161b22; stroke: #30363d; }
+      .blue { fill: #0f2140; stroke: #1f6feb; }
+      .green { fill: #0f2a1a; stroke: #2ea043; }
+      .orange { fill: #2b1a0c; stroke: #db6d28; }
+      .purple { fill: #231a36; stroke: #8957e5; }
+      .red { fill: #2d1214; stroke: #da3633; }
+      .ink { fill: #9198a1; }
+      text { fill: #e6edf3; }
+      .s { fill: #9198a1; }
+      .num { fill: #0d1117; }
+      .line { stroke: #6e7681; }
+      .line-blue { stroke: #4493f8; }
+      .line-purple { stroke: #ab7df8; }
+      .line-red { stroke: #f85149; }
+      .a-grey { fill: #6e7681; }
+      .a-blue { fill: #4493f8; }
+      .a-purple { fill: #ab7df8; }
+      .a-red { fill: #f85149; }
+      .dot-blue { fill: #4493f8; }
+      .dot-green { fill: #3fb950; }
+      .dot-orange { fill: #f0883e; }
+    }
+  </style>
+  <defs>
+    <marker id="m-grey" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-grey" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="m-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-blue" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="m-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-purple" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="m-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-red" d="M0,0 L10,5 L0,10 z"/></marker>
+  </defs>
+  <rect class="bg" x="0" y="0" width="960" height="268" rx="16"/>
+  <text x="24" y="38" class="h">One daily run</text>
+  <text x="140" y="38" class="s">claude-usage run, started by launchd at your schedule time</text>
+  <rect class="card" x="24" y="60" width="160" height="110" rx="10"/>
+  <circle class="dot-blue" cx="50" cy="86" r="11"/>
+  <text x="50" y="90" class="num" text-anchor="middle">1</text>
+  <text x="70" y="91" class="h">Read</text>
+  <text x="40" y="124" class="s">new lines only</text>
+  <text x="40" y="144" class="s">from saved offsets</text>
+  <path class="line" d="M184,115 L210,115" marker-end="url(#m-grey)"/>
+  <rect class="card" x="212" y="60" width="160" height="110" rx="10"/>
+  <circle class="dot-blue" cx="238" cy="86" r="11"/>
+  <text x="238" y="90" class="num" text-anchor="middle">2</text>
+  <text x="258" y="91" class="h">Extract</text>
+  <text x="228" y="124" class="s">allowlisted fields</text>
+  <text x="228" y="144" class="s">ids salted, hashed</text>
+  <path class="line" d="M372,115 L398,115" marker-end="url(#m-grey)"/>
+  <rect class="green" x="400" y="60" width="160" height="110" rx="10"/>
+  <circle class="dot-blue" cx="426" cy="86" r="11"/>
+  <text x="426" y="90" class="num" text-anchor="middle">3</text>
+  <text x="446" y="91" class="h">Guard</text>
+  <text x="416" y="124" class="s">checks each column</text>
+  <text x="416" y="144" class="s">any fail: stop</text>
+  <path class="line" d="M560,115 L586,115" marker-end="url(#m-grey)"/>
+  <rect class="card" x="588" y="60" width="160" height="110" rx="10"/>
+  <circle class="dot-blue" cx="614" cy="86" r="11"/>
+  <text x="614" y="90" class="num" text-anchor="middle">4</text>
+  <text x="634" y="91" class="h">Write</text>
+  <text x="604" y="124" class="s">append day CSVs</text>
+  <text x="604" y="144" class="s">then save offsets</text>
+  <path class="line" d="M748,115 L774,115" marker-end="url(#m-grey)"/>
+  <rect class="card" x="776" y="60" width="160" height="110" rx="10"/>
+  <circle class="dot-blue" cx="802" cy="86" r="11"/>
+  <text x="802" y="90" class="num" text-anchor="middle">5</text>
+  <text x="822" y="91" class="h">Push</text>
+  <text x="792" y="124" class="s">commit, rebase</text>
+  <text x="792" y="144" class="s">push (git store)</text>
+  <path class="line-red" d="M480,170 L480,206" marker-end="url(#m-red)"/>
+  <rect class="red" x="236" y="208" width="420" height="40" rx="10"/>
+  <text x="250" y="233" class="s">Guard fails: nothing written, exit 1, offsets kept</text>
+  <path class="line-purple" d="M856,206 L856,172" marker-end="url(#m-purple)"/>
+  <rect class="purple" x="676" y="208" width="260" height="40" rx="10"/>
+  <text x="690" y="233" class="s">Once a month: ccusage cross-check</text>
+</svg>

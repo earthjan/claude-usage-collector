@@ -1,0 +1,17 @@
+ts,account,machine,project,session,agent,is_subagent,agent_type,spawn_depth,is_fork,model,effort,input,cache_read,cache_write,output,context,web_search,web_fetch,tools,compacted
+2026-04-13T12:06:42Z,personal,188f4f5a14d2,9f5834984ba2,8f6ac043ebd5,,0,,,0,claude-opus-5-5,,50,21477,9831,820,31358,0,0,Read;WebFetch;Write,0
+2026-04-13T12:08:19Z,personal,188f4f5a14d2,9f5834984ba2,8f6ac043ebd5,,0,,,0,claude-opus-5-5,,19,29883,4425,242,34327,0,0,Bash;WebFetch;Write,0
+2026-04-13T12:10:08Z,personal,188f4f5a14d2,9f5834984ba2,8f6ac043ebd5,,0,,,0,claude-opus-5-5,high,40,33023,3914,463,36977,0,0,Edit,0
+2026-04-13T12:12:08Z,personal,188f4f5a14d2,9f5834984ba2,8f6ac043ebd5,,0,,,0,claude-opus-5-5,xhigh,14,34614,7089,1096,41717,0,0,Grep;WebFetch,0
+2026-04-13T12:12:28Z,personal,188f4f5a14d2,9f5834984ba2,8f6ac043ebd5,,0,,,0,claude-opus-5-5,low,23,37141,13728,212,50892,0,0,Edit;Grep;Write,0
+2026-04-13T12:12:59Z,personal,188f4f5a14d2,9f5834984ba2,8f6ac043ebd5,,0,,,0,claude-opus-5-5,low,38,46985,11722,1259,58745,0,0,Edit,0
+2026-04-13T12:14:19Z,personal,188f4f5a14d2,9f5834984ba2,8f6ac043ebd5,,0,,,0,claude-opus-5-5,xhigh,10,57463,3848,229,61321,0,0,Write,0
+2026-04-13T12:15:57Z,personal,188f4f5a14d2,9f5834984ba2,8f6ac043ebd5,,0,,,0,claude-opus-5-5,medium,36,59080,6724,728,65840,0,0,,0
+2026-04-13T12:16:14Z,personal,188f4f5a14d2,9f5834984ba2,8f6ac043ebd5,,0,,,0,claude-opus-5-5,xhigh,49,62277,10689,388,73015,0,0,Grep;WebFetch;Write,0
+2026-04-13T12:17:42Z,personal,188f4f5a14d2,9f5834984ba2,8f6ac043ebd5,,0,,,0,claude-opus-5-5,low,44,71252,5291,186,76587,0,0,Edit;Write,0
+2026-04-13T12:19:52Z,personal,188f4f5a14d2,9f5834984ba2,8f6ac043ebd5,,0,,,0,claude-opus-5-5,high,22,74941,4940,783,79903,0,0,Edit;Write,0
+2026-04-13T12:21:19Z,personal,188f4f5a14d2,9f5834984ba2,8f6ac043ebd5,,0,,,0,claude-opus-5-5,low,23,79562,1025,689,80610,0,0,Bash;Edit;Glob,0
+2026-04-13T12:22:37Z,personal,188f4f5a14d2,9f5834984ba2,8f6ac043ebd5,,0,,,0,claude-opus-5-5,low,25,78861,5248,1125,84134,0,0,Edit;Read,0
+2026-04-13T12:24:49Z,personal,188f4f5a14d2,9f5834984ba2,8f6ac043ebd5,,0,,,0,claude-opus-5-5,,31,79883,12755,918,92669,0,0,,0
+2026-04-13T12:25:54Z,personal,188f4f5a14d2,9f5834984ba2,8f6ac043ebd5,,0,,,0,claude-opus-5-5,xhigh,57,90424,6735,574,97216,0,0,Glob;WebFetch,0
+2026-04-13T12:27:40Z,personal,188f4f5a14d2,9f5834984ba2,8f6ac043ebd5,,0,,,0,claude-opus-5-5,xhigh,8,96344,2618,60,98970,0,0,Bash,0

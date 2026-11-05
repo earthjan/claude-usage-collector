@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="300" viewBox="0 0 960 300" role="img" aria-labelledby="title desc">
+  <title id="title">Cross-check flow</title>
+  <desc id="desc">The collector and ccusage read the same transcripts independently. compare sums rows per day and model and checks them against ccusage totals.</desc>
+  <style>
+    .bg { fill: #f6f8fa; }
+    .card { fill: #ffffff; stroke: #d0d7de; stroke-width: 1; }
+    .blue { fill: #ddf4ff; stroke: #54aeff; stroke-width: 1; }
+    .green { fill: #dafbe1; stroke: #4ac26b; stroke-width: 1; }
+    .orange { fill: #fff1e5; stroke: #fb8f44; stroke-width: 1; }
+    .purple { fill: #fbefff; stroke: #c297ff; stroke-width: 1; }
+    .red { fill: #ffebe9; stroke: #ff8182; stroke-width: 1; }
+    .ink { fill: #59636e; }
+    text { fill: #1f2328; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 13px; }
+    .h { font-size: 15px; font-weight: 600; }
+    .b { font-weight: 600; }
+    .s { font-size: 12px; fill: #59636e; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .num { fill: #ffffff; font-size: 12px; font-weight: 600; }
+    .line { stroke: #8c959f; stroke-width: 1.5; fill: none; }
+    .line-blue { stroke: #0969da; stroke-width: 1.5; fill: none; }
+    .line-purple { stroke: #8250df; stroke-width: 1.5; fill: none; stroke-dasharray: 5 4; }
+    .line-red { stroke: #cf222e; stroke-width: 1.5; fill: none; stroke-dasharray: 5 4; }
+    .a-grey { fill: #8c959f; }
+    .a-blue { fill: #0969da; }
+    .a-purple { fill: #8250df; }
+    .a-red { fill: #cf222e; }
+    .dot-blue { fill: #0969da; }
+    .dot-green { fill: #1a7f37; }
+    .dot-orange { fill: #bc4c00; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #0d1117; }
+      .card { fill: #161b22; stroke: #30363d; }
+      .blue { fill: #0f2140; stroke: #1f6feb; }
+      .green { fill: #0f2a1a; stroke: #2ea043; }
+      .orange { fill: #2b1a0c; stroke: #db6d28; }
+      .purple { fill: #231a36; stroke: #8957e5; }
+      .red { fill: #2d1214; stroke: #da3633; }
+      .ink { fill: #9198a1; }
+      text { fill: #e6edf3; }
+      .s { fill: #9198a1; }
+      .num { fill: #0d1117; }
+      .line { stroke: #6e7681; }
+      .line-blue { stroke: #4493f8; }
+      .line-purple { stroke: #ab7df8; }
+      .line-red { stroke: #f85149; }
+      .a-grey { fill: #6e7681; }
+      .a-blue { fill: #4493f8; }
+      .a-purple { fill: #ab7df8; }
+      .a-red { fill: #f85149; }
+      .dot-blue { fill: #4493f8; }
+      .dot-green { fill: #3fb950; }
+      .dot-orange { fill: #f0883e; }
+    }
+  </style>
+  <defs>
+    <marker id="m-grey" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-grey" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="m-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-blue" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="m-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-purple" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="m-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-red" d="M0,0 L10,5 L0,10 z"/></marker>
+  </defs>
+  <rect class="bg" x="0" y="0" width="960" height="300" rx="16"/>
+  <text x="24" y="40" class="h">Cross-check</text>
+  <text x="130" y="40" class="s">two independent readings of the same transcripts</text>
+  <rect class="card" x="24" y="68" width="200" height="80" rx="10"/>
+  <text x="40" y="94" class="b">Transcripts</text>
+  <text x="40" y="113" class="s">~/.claude/projects</text>
+  <path class="line-blue" d="M224,108 L262,108" marker-end="url(#m-blue)"/>
+  <rect class="blue" x="264" y="68" width="200" height="80" rx="10"/>
+  <text x="280" y="94" class="b">collect</text>
+  <text x="280" y="113" class="s">one row per message</text>
+  <path class="line-blue" d="M464,108 L502,108" marker-end="url(#m-blue)"/>
+  <rect class="blue" x="504" y="68" width="200" height="80" rx="10"/>
+  <text x="520" y="94" class="b">Usage rows</text>
+  <text x="520" y="113" class="s">&lt;account&gt;/YYYY/MM/</text>
+  <text x="520" y="132" class="s">YYYY-MM-DD.csv</text>
+  <rect class="purple" x="24" y="196" width="200" height="80" rx="10"/>
+  <text x="40" y="222" class="b">ccusage</text>
+  <text x="40" y="241" class="s">daily --json</text>
+  <text x="40" y="260" class="s">for one month</text>
+  <path class="line-purple" d="M224,236 L262,236" marker-end="url(#m-purple)"/>
+  <rect class="purple" x="264" y="196" width="200" height="80" rx="10"/>
+  <text x="280" y="222" class="b">crosscheck</text>
+  <text x="280" y="241" class="s">4 totals per model</text>
+  <text x="280" y="260" class="s">per day, guarded</text>
+  <path class="line-purple" d="M464,236 L502,236" marker-end="url(#m-purple)"/>
+  <rect class="purple" x="504" y="196" width="200" height="80" rx="10"/>
+  <text x="520" y="222" class="b">Check totals</text>
+  <text x="520" y="241" class="s">checks/&lt;account&gt;/</text>
+  <text x="520" y="260" class="s">&lt;machine&gt;/YYYY-MM.json</text>
+  <path class="line" d="M124,148 L124,194" marker-end="url(#m-grey)"/>
+  <text x="134" y="176" class="s">reads the same files</text>
+  <rect class="card" x="744" y="68" width="192" height="208" rx="10"/>
+  <text x="760" y="98" class="h">compare</text>
+  <text x="760" y="136" class="s">sum rows by</text>
+  <text x="760" y="155" class="s">day and model,</text>
+  <text x="760" y="174" class="s">set against</text>
+  <text x="760" y="193" class="s">check totals</text>
+  <text x="760" y="231" class="s">gap over tolerance:</text>
+  <text x="760" y="250" class="b">exit 1</text>
+  <path class="line-blue" d="M704,108 L742,108" marker-end="url(#m-blue)"/>
+  <path class="line-purple" d="M704,236 L742,236" marker-end="url(#m-purple)"/>
+</svg>

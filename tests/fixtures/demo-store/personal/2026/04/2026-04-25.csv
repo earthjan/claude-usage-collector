@@ -1,0 +1,16 @@
+ts,account,machine,project,session,agent,is_subagent,agent_type,spawn_depth,is_fork,model,effort,input,cache_read,cache_write,output,context,web_search,web_fetch,tools,compacted
+2026-04-25T12:07:19Z,personal,188f4f5a14d2,ce4ec9b87d22,a2d95ea8d64e,,0,,,0,claude-opus-5-5,low,52,18438,14402,46,32892,0,0,WebFetch,0
+2026-04-25T12:09:41Z,personal,188f4f5a14d2,ce4ec9b87d22,a2d95ea8d64e,,0,,,0,claude-opus-5-5,low,56,30136,8268,544,38460,0,0,Edit;Glob,0
+2026-04-25T12:10:20Z,personal,188f4f5a14d2,ce4ec9b87d22,a2d95ea8d64e,,0,,,0,claude-opus-5-5,,3,34075,13157,345,47235,0,0,Glob;WebFetch;Write,0
+2026-04-25T12:10:57Z,personal,188f4f5a14d2,ce4ec9b87d22,a2d95ea8d64e,,0,,,0,claude-opus-5-5,,43,45766,4408,605,50217,0,0,Edit,0
+2026-04-25T12:13:22Z,personal,188f4f5a14d2,ce4ec9b87d22,a2d95ea8d64e,,0,,,0,claude-opus-5-5,,7,49116,3304,377,52427,0,0,Edit;WebFetch,0
+2026-04-25T12:14:30Z,personal,188f4f5a14d2,ce4ec9b87d22,a2d95ea8d64e,,0,,,0,claude-opus-5-5,medium,39,50662,5296,1191,55997,0,0,,0
+2026-04-25T12:16:42Z,personal,188f4f5a14d2,ce4ec9b87d22,a2d95ea8d64e,,0,,,0,claude-opus-5-5,medium,59,55685,938,1037,56682,0,0,Edit;Grep;WebFetch,0
+2026-04-25T12:17:42Z,personal,188f4f5a14d2,ce4ec9b87d22,a2d95ea8d64e,,0,,,0,claude-opus-5-5,medium,7,54232,7350,93,61589,0,0,Glob,0
+2026-04-25T12:18:20Z,personal,188f4f5a14d2,ce4ec9b87d22,a2d95ea8d64e,,0,,,0,claude-opus-5-5,low,51,60345,3734,1034,64130,0,0,Glob;Read;Write,0
+2026-04-25T12:19:09Z,personal,188f4f5a14d2,ce4ec9b87d22,a2d95ea8d64e,,0,,,0,claude-opus-5-5,high,34,62877,3761,2146,66672,0,0,Bash;Read,0
+2026-04-25T12:21:10Z,personal,188f4f5a14d2,ce4ec9b87d22,a2d95ea8d64e,,0,,,0,claude-opus-5-5,low,14,64898,5322,458,70234,0,0,Edit,0
+2026-04-25T12:22:03Z,personal,188f4f5a14d2,ce4ec9b87d22,a2d95ea8d64e,,0,,,0,claude-opus-5-5,xhigh,3,66679,10667,118,77349,0,1,,0
+2026-04-25T12:24:02Z,personal,188f4f5a14d2,ce4ec9b87d22,a2d95ea8d64e,,0,,,0,claude-opus-5-5,,54,74703,7938,650,82695,0,0,Bash;Write,0
+2026-04-25T12:27:53Z,personal,188f4f5a14d2,ce4ec9b87d22,a2d95ea8d64e,5ab25577e46a,1,review-kit:code-reviewer,1,0,claude-sonnet-5-5,low,5,12836,13708,456,26549,0,0,Edit;WebFetch,0
+2026-04-25T12:29:25Z,personal,188f4f5a14d2,ce4ec9b87d22,a2d95ea8d64e,5ab25577e46a,1,review-kit:code-reviewer,1,0,claude-sonnet-5-5,high,5,24277,6818,897,31100,0,0,Read;WebFetch;Write,0

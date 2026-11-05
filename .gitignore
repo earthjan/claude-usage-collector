@@ -1,0 +1,19 @@
+__pycache__/
+*.pyc
+.DS_Store
+
+# Local config, salt and state never belong in the repo
+config.json
+config.local.json
+*.local.json
+salt
+state.json
+*.tmp
+
+# Usage data stays out of the tool repo, except synthetic test fixtures
+*.csv
+!tests/fixtures/**/*.csv
+checks/
+!tests/fixtures/demo-store/checks/
+report.html
+!docs/demo/report.html

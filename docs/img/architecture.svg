@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="476" viewBox="0 0 960 476" role="img" aria-labelledby="title desc">
+  <title id="title">claude-usage-collector architecture</title>
+  <desc id="desc">Several machines each run a collector and guard that turn local transcripts into number-only rows, push them to one private data store, and a research machine reads that store. ccusage provides a monthly cross-check.</desc>
+  <style>
+    .bg { fill: #f6f8fa; }
+    .card { fill: #ffffff; stroke: #d0d7de; stroke-width: 1; }
+    .blue { fill: #ddf4ff; stroke: #54aeff; stroke-width: 1; }
+    .green { fill: #dafbe1; stroke: #4ac26b; stroke-width: 1; }
+    .orange { fill: #fff1e5; stroke: #fb8f44; stroke-width: 1; }
+    .purple { fill: #fbefff; stroke: #c297ff; stroke-width: 1; }
+    .red { fill: #ffebe9; stroke: #ff8182; stroke-width: 1; }
+    .ink { fill: #59636e; }
+    text { fill: #1f2328; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 13px; }
+    .h { font-size: 15px; font-weight: 600; }
+    .b { font-weight: 600; }
+    .s { font-size: 12px; fill: #59636e; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .num { fill: #ffffff; font-size: 12px; font-weight: 600; }
+    .line { stroke: #8c959f; stroke-width: 1.5; fill: none; }
+    .line-blue { stroke: #0969da; stroke-width: 1.5; fill: none; }
+    .line-purple { stroke: #8250df; stroke-width: 1.5; fill: none; stroke-dasharray: 5 4; }
+    .line-red { stroke: #cf222e; stroke-width: 1.5; fill: none; stroke-dasharray: 5 4; }
+    .a-grey { fill: #8c959f; }
+    .a-blue { fill: #0969da; }
+    .a-purple { fill: #8250df; }
+    .a-red { fill: #cf222e; }
+    .dot-blue { fill: #0969da; }
+    .dot-green { fill: #1a7f37; }
+    .dot-orange { fill: #bc4c00; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #0d1117; }
+      .card { fill: #161b22; stroke: #30363d; }
+      .blue { fill: #0f2140; stroke: #1f6feb; }
+      .green { fill: #0f2a1a; stroke: #2ea043; }
+      .orange { fill: #2b1a0c; stroke: #db6d28; }
+      .purple { fill: #231a36; stroke: #8957e5; }
+      .red { fill: #2d1214; stroke: #da3633; }
+      .ink { fill: #9198a1; }
+      text { fill: #e6edf3; }
+      .s { fill: #9198a1; }
+      .num { fill: #0d1117; }
+      .line { stroke: #6e7681; }
+      .line-blue { stroke: #4493f8; }
+      .line-purple { stroke: #ab7df8; }
+      .line-red { stroke: #f85149; }
+      .a-grey { fill: #6e7681; }
+      .a-blue { fill: #4493f8; }
+      .a-purple { fill: #ab7df8; }
+      .a-red { fill: #f85149; }
+      .dot-blue { fill: #4493f8; }
+      .dot-green { fill: #3fb950; }
+      .dot-orange { fill: #f0883e; }
+    }
+  </style>
+  <defs>
+    <marker id="m-grey" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-grey" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="m-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-blue" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="m-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-purple" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="m-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-red" d="M0,0 L10,5 L0,10 z"/></marker>
+  </defs>
+  <rect class="bg" x="0" y="0" width="960" height="476" rx="16"/>
+  <text x="32" y="40" class="h">How the pieces fit</text>
+  <text x="200" y="40" class="s">each machine sends numbers only, into one private store</text>
+  <rect class="card" x="32" y="68" width="380" height="100" rx="10"/>
+  <text x="48" y="92" class="b">Machine A, account: work</text>
+  <rect class="purple" x="320" y="78" width="76" height="22" rx="11"/>
+  <text x="358" y="93" class="s" text-anchor="middle">ccusage</text>
+  <rect class="card" x="48" y="110" width="150" height="44" rx="8"/>
+  <text x="58" y="128" class="b">transcripts</text>
+  <text x="58" y="145" class="s">~/.claude/projects</text>
+  <path class="line" d="M198,132 L220,132" marker-end="url(#m-grey)"/>
+  <rect class="blue" x="222" y="110" width="174" height="44" rx="8"/>
+  <text x="232" y="128" class="b">collector + guard</text>
+  <text x="232" y="145" class="s">numbers, slugs, hashes</text>
+  <path class="line-blue" d="M412,132 C440,132 440,176 468,176" marker-end="url(#m-blue)"/>
+  <rect class="card" x="32" y="180" width="380" height="100" rx="10"/>
+  <text x="48" y="204" class="b">Machine B, account: work</text>
+  <rect class="purple" x="320" y="190" width="76" height="22" rx="11"/>
+  <text x="358" y="205" class="s" text-anchor="middle">ccusage</text>
+  <rect class="card" x="48" y="222" width="150" height="44" rx="8"/>
+  <text x="58" y="240" class="b">transcripts</text>
+  <text x="58" y="257" class="s">~/.claude/projects</text>
+  <path class="line" d="M198,244 L220,244" marker-end="url(#m-grey)"/>
+  <rect class="blue" x="222" y="222" width="174" height="44" rx="8"/>
+  <text x="232" y="240" class="b">collector + guard</text>
+  <text x="232" y="257" class="s">numbers, slugs, hashes</text>
+  <path class="line-blue" d="M412,244 C440,244 440,230 468,230" marker-end="url(#m-blue)"/>
+  <rect class="card" x="32" y="292" width="380" height="100" rx="10"/>
+  <text x="48" y="316" class="b">Machine C, account: personal</text>
+  <rect class="purple" x="320" y="302" width="76" height="22" rx="11"/>
+  <text x="358" y="317" class="s" text-anchor="middle">ccusage</text>
+  <rect class="card" x="48" y="334" width="150" height="44" rx="8"/>
+  <text x="58" y="352" class="b">transcripts</text>
+  <text x="58" y="369" class="s">~/.claude/projects</text>
+  <path class="line" d="M198,356 L220,356" marker-end="url(#m-grey)"/>
+  <rect class="blue" x="222" y="334" width="174" height="44" rx="8"/>
+  <text x="232" y="352" class="b">collector + guard</text>
+  <text x="232" y="369" class="s">numbers, slugs, hashes</text>
+  <path class="line-blue" d="M412,356 C440,356 440,284 468,284" marker-end="url(#m-blue)"/>
+  <rect class="card" x="470" y="120" width="214" height="220" rx="10"/>
+  <text x="486" y="148" class="h">Private data store</text>
+  <text x="486" y="168" class="s">git repo or folder</text>
+  <rect class="blue" x="486" y="180" width="182" height="38" rx="8"/>
+  <text x="496" y="203" class="s">work/  usage rows (CSV)</text>
+  <rect class="blue" x="486" y="234" width="182" height="38" rx="8"/>
+  <text x="496" y="257" class="s">personal/  usage rows</text>
+  <rect class="purple" x="486" y="288" width="182" height="38" rx="8"/>
+  <text x="496" y="311" class="s">checks/  ccusage totals</text>
+  <path class="line" d="M684,230 L738,230" marker-end="url(#m-grey)"/>
+  <text x="711" y="222" class="s" text-anchor="middle">pull</text>
+  <rect class="card" x="740" y="120" width="188" height="220" rx="10"/>
+  <text x="756" y="148" class="h">Research machine</text>
+  <text x="756" y="168" class="s">a clone of the store</text>
+  <rect class="card" x="756" y="180" width="156" height="44" rx="8"/>
+  <text x="766" y="198" class="b">analyze</text>
+  <text x="766" y="215" class="s">text breakdowns</text>
+  <rect class="card" x="756" y="234" width="156" height="44" rx="8"/>
+  <text x="766" y="252" class="b">report</text>
+  <text x="766" y="269" class="s">static HTML page</text>
+  <rect class="card" x="756" y="288" width="156" height="44" rx="8"/>
+  <text x="766" y="306" class="b">compare</text>
+  <text x="766" y="323" class="s">rows vs ccusage</text>
+  <rect class="orange" x="32" y="416" width="896" height="40" rx="10"/>
+  <text x="48" y="441" class="s">Prompts, replies, code, paths, titles and branch names never leave the machine they were written on.</text>
+</svg>

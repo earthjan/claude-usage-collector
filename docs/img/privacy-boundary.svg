@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="436" viewBox="0 0 960 436" role="img" aria-labelledby="title desc">
+  <title id="title">Privacy boundary</title>
+  <desc id="desc">Transcript content, names, paths and the salt stay on the machine. Only timestamps, counts, slugs and salted hashes pass the guard.</desc>
+  <style>
+    .bg { fill: #f6f8fa; }
+    .card { fill: #ffffff; stroke: #d0d7de; stroke-width: 1; }
+    .blue { fill: #ddf4ff; stroke: #54aeff; stroke-width: 1; }
+    .green { fill: #dafbe1; stroke: #4ac26b; stroke-width: 1; }
+    .orange { fill: #fff1e5; stroke: #fb8f44; stroke-width: 1; }
+    .purple { fill: #fbefff; stroke: #c297ff; stroke-width: 1; }
+    .red { fill: #ffebe9; stroke: #ff8182; stroke-width: 1; }
+    .ink { fill: #59636e; }
+    text { fill: #1f2328; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 13px; }
+    .h { font-size: 15px; font-weight: 600; }
+    .b { font-weight: 600; }
+    .s { font-size: 12px; fill: #59636e; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .num { fill: #ffffff; font-size: 12px; font-weight: 600; }
+    .line { stroke: #8c959f; stroke-width: 1.5; fill: none; }
+    .line-blue { stroke: #0969da; stroke-width: 1.5; fill: none; }
+    .line-purple { stroke: #8250df; stroke-width: 1.5; fill: none; stroke-dasharray: 5 4; }
+    .line-red { stroke: #cf222e; stroke-width: 1.5; fill: none; stroke-dasharray: 5 4; }
+    .a-grey { fill: #8c959f; }
+    .a-blue { fill: #0969da; }
+    .a-purple { fill: #8250df; }
+    .a-red { fill: #cf222e; }
+    .dot-blue { fill: #0969da; }
+    .dot-green { fill: #1a7f37; }
+    .dot-orange { fill: #bc4c00; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #0d1117; }
+      .card { fill: #161b22; stroke: #30363d; }
+      .blue { fill: #0f2140; stroke: #1f6feb; }
+      .green { fill: #0f2a1a; stroke: #2ea043; }
+      .orange { fill: #2b1a0c; stroke: #db6d28; }
+      .purple { fill: #231a36; stroke: #8957e5; }
+      .red { fill: #2d1214; stroke: #da3633; }
+      .ink { fill: #9198a1; }
+      text { fill: #e6edf3; }
+      .s { fill: #9198a1; }
+      .num { fill: #0d1117; }
+      .line { stroke: #6e7681; }
+      .line-blue { stroke: #4493f8; }
+      .line-purple { stroke: #ab7df8; }
+      .line-red { stroke: #f85149; }
+      .a-grey { fill: #6e7681; }
+      .a-blue { fill: #4493f8; }
+      .a-purple { fill: #ab7df8; }
+      .a-red { fill: #f85149; }
+      .dot-blue { fill: #4493f8; }
+      .dot-green { fill: #3fb950; }
+      .dot-orange { fill: #f0883e; }
+    }
+  </style>
+  <defs>
+    <marker id="m-grey" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-grey" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="m-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-blue" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="m-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-purple" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="m-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-red" d="M0,0 L10,5 L0,10 z"/></marker>
+  </defs>
+  <rect class="bg" x="0" y="0" width="960" height="436" rx="16"/>
+  <text x="24" y="40" class="h">What stays, what leaves</text>
+  <text x="220" y="40" class="s">the guard is the only door out, and it fails closed</text>
+  <rect class="orange" x="24" y="64" width="380" height="348" rx="12"/>
+  <text x="44" y="94" class="h">Stays on this machine</text>
+  <rect class="green" x="556" y="64" width="380" height="348" rx="12"/>
+  <text x="576" y="94" class="h">Leaves, after the guard</text>
+  <circle class="dot-orange" cx="48" cy="124" r="3.5"/>
+  <text x="62" y="128">Prompts and replies</text>
+  <circle class="dot-orange" cx="48" cy="155" r="3.5"/>
+  <text x="62" y="159">Thinking blocks</text>
+  <circle class="dot-orange" cx="48" cy="186" r="3.5"/>
+  <text x="62" y="190">Code, tool inputs and tool outputs</text>
+  <circle class="dot-orange" cx="48" cy="217" r="3.5"/>
+  <text x="62" y="221">Session titles, agent descriptions</text>
+  <circle class="dot-orange" cx="48" cy="248" r="3.5"/>
+  <text x="62" y="252">File paths and project folder names</text>
+  <circle class="dot-orange" cx="48" cy="279" r="3.5"/>
+  <text x="62" y="283">Git branch names</text>
+  <circle class="dot-orange" cx="48" cy="310" r="3.5"/>
+  <text x="62" y="314">Hostname, session ids, agent ids</text>
+  <circle class="dot-orange" cx="48" cy="341" r="3.5"/>
+  <text x="62" y="345">The salt (config folder, mode 600)</text>
+  <circle class="dot-orange" cx="48" cy="372" r="3.5"/>
+  <text x="62" y="376">Read offsets and seen ids (state file)</text>
+  <circle class="dot-green" cx="580" cy="124" r="3.5"/>
+  <text x="594" y="128">Timestamps, UTC (optional: hour only)</text>
+  <circle class="dot-green" cx="580" cy="155" r="3.5"/>
+  <text x="594" y="159">Token counts: input, cache, output</text>
+  <circle class="dot-green" cx="580" cy="186" r="3.5"/>
+  <text x="594" y="190">Model slug and effort level</text>
+  <circle class="dot-green" cx="580" cy="217" r="3.5"/>
+  <text x="594" y="221">Tool names (MCP tools hashed)</text>
+  <circle class="dot-green" cx="580" cy="248" r="3.5"/>
+  <text x="594" y="252">Agent type, spawn depth, fork flag</text>
+  <circle class="dot-green" cx="580" cy="279" r="3.5"/>
+  <text x="594" y="283">Salted hashes of project and session</text>
+  <circle class="dot-green" cx="580" cy="310" r="3.5"/>
+  <text x="594" y="314">Salted hashes of agent and machine</text>
+  <circle class="dot-green" cx="580" cy="341" r="3.5"/>
+  <text x="594" y="345">Web search and fetch counts</text>
+  <circle class="dot-green" cx="580" cy="372" r="3.5"/>
+  <text x="594" y="376">Account label you chose, e.g. work</text>
+  <rect class="card" x="424" y="140" width="112" height="196" rx="12"/>
+  <text x="480" y="200" class="h" text-anchor="middle">guard</text>
+  <text x="480" y="240" class="s" text-anchor="middle">21 columns</text>
+  <text x="480" y="260" class="s" text-anchor="middle">strict rules</text>
+  <text x="480" y="280" class="s" text-anchor="middle">fail closed</text>
+  <path class="line" d="M404,238 L422,238" marker-end="url(#m-grey)"/>
+  <path class="line-blue" d="M536,238 L554,238" marker-end="url(#m-blue)"/>
+</svg>
