@@ -9,7 +9,7 @@ import sys
 
 from . import config as config_module
 from . import crosscheck as crosscheck_module
-from . import periods
+from . import periods, sinks
 from .hashing import SaltError, load_salt
 
 LAUNCHD_LABEL = "io.github.claude-usage-collector"
@@ -45,6 +45,7 @@ class Doctor:
         self._check_salt()
         self._check_sources(config["sources"])
         self._check_destination(config["destination"])
+        self._check_separation(config)
         self._check_hashing(config["hash_names"])
         self._check_launchd()
         self._check_ccusage(config["crosscheck"])
@@ -84,6 +85,16 @@ class Doctor:
         self._check_writable(path)
         if destination["type"] == "git":
             self._check_git(path, destination.get("remote", "origin"))
+
+    def _check_separation(self, config: dict) -> None:
+        destination = dict(config["destination"], path=self._expand(config["destination"]["path"]))
+        sink = sinks.make_sink(dict(config, destination=destination), env=dict(self.environ))
+        try:
+            sink.check_separate()
+        except sinks.SyncError as error:
+            self._add("FAIL", "separation", str(error))
+            return
+        self._add("OK", "separation", "usage data stays out of the tool's repo")
 
     def _check_writable(self, path: str) -> None:
         if os.path.isdir(path):

@@ -312,7 +312,7 @@ def _add_init(commands) -> None:
     init = commands.add_parser("init", help="write config and salt")
     init.add_argument("--account", required=True, help="account label, e.g. work")
     init.add_argument("--dest-type", choices=("folder", "git"), default="folder")
-    init.add_argument("--dest", help="destination folder (default ~/usage-data)")
+    init.add_argument("--dest", help="destination folder for usage data (required)")
     init.add_argument("--schedule", help="daily run time HH:MM (default 18:00)")
     init.add_argument("--force", action="store_true", help="replace existing config")
 

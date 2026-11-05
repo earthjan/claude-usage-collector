@@ -372,6 +372,53 @@ class GitSinkTest(unittest.TestCase):
             sink.sync(TODAY)
 
 
+class ToolRepoSeparationTest(unittest.TestCase):
+    """Usage data must never land in, or push to, the tool's own repo."""
+
+    def setUp(self):
+        self.tmp = support.TempDir()
+        self.env = isolated_git_env(self.tmp)
+        self.tool = self.tmp.join("tool")
+        self.git("init", "-q", "-b", "main", self.tool)
+        self.git("remote", "add", "origin",
+                 "git@github.com:example-user/claude-usage-collector.git", cwd=self.tool)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def git(self, *args, cwd=None):
+        subprocess.run(("git",) + args, cwd=cwd, env=self.env, check=True,
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    def data_clone(self, remote_url, name="data"):
+        path = self.tmp.join(name)
+        self.git("init", "-q", "-b", "main", path)
+        self.git("remote", "add", "origin", remote_url, cwd=path)
+        return sinks.GitSink(path, "work", "origin", "main", True,
+                             env=self.env, tool_root=self.tool)
+
+    def test_folder_inside_the_tool_repo_is_refused(self):
+        sink = sinks.FolderSink(os.path.join(self.tool, "data"), "work",
+                                tool_root=self.tool)
+        with self.assertRaises(sinks.SyncError) as caught:
+            sink.check_ready()
+        self.assertIn("tool", str(caught.exception))
+
+    def test_git_destination_pushing_to_the_tool_repo_is_refused(self):
+        urls = ("git@github.com:example-user/claude-usage-collector.git",
+                "https://github.com/example-user/claude-usage-collector/")
+        for index, url in enumerate(urls):
+            with self.subTest(url=url):
+                sink = self.data_clone(url, name="data%d" % index)
+                with self.assertRaises(sinks.SyncError) as caught:
+                    sink.check_ready()
+                self.assertIn("tool", str(caught.exception))
+
+    def test_separate_private_repo_is_accepted(self):
+        sink = self.data_clone("git@github.com:example-user/usage-data.git")
+        sink.check_ready()
+
+
 class MakeSinkTest(unittest.TestCase):
     def test_builds_sink_from_destination_config(self):
         folder = sinks.make_sink({"account": "work", "destination": {

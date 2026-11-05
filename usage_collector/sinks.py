@@ -11,6 +11,7 @@ FILE_SUFFIXES = {
     "usage": ".csv", "context": ".context.csv",
     "skills": ".skills.csv", "catalog": ".catalog.csv",
 }
+TOOL_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GIT_IDENTITY = (
     "-c", "user.name=claude-usage-collector",
     "-c", "user.email=claude-usage-collector@users.noreply.github.com",
@@ -42,13 +43,23 @@ def make_sink(config: dict, env=None):
 
 
 class FolderSink:
-    def __init__(self, path: str, account: str, hashed_names=False):
+    def __init__(self, path: str, account: str, hashed_names=False,
+                 tool_root=TOOL_ROOT):
         self.path = path
         self.account = account
         self.hashed_names = hashed_names
+        self.tool_root = tool_root
 
     def check_ready(self) -> None:
-        pass
+        self.check_separate()
+
+    def check_separate(self) -> None:
+        """Raises SyncError when usage data would land in the tool's own repo."""
+        if _is_within(self.path, self.tool_root):
+            raise SyncError(
+                "destination is inside the tool's own repo, "
+                "use a separate private folder for usage data"
+            )
 
     def write_rows(self, rows) -> list:
         return self.write_streams({"usage": rows})
@@ -132,8 +143,9 @@ def _group_by_day(rows) -> dict:
 
 
 class GitSink(FolderSink):
-    def __init__(self, path, account, remote, branch, push, env=None, hashed_names=False):
-        super().__init__(path, account, hashed_names)
+    def __init__(self, path, account, remote, branch, push, env=None,
+                 hashed_names=False, tool_root=TOOL_ROOT):
+        super().__init__(path, account, hashed_names, tool_root)
         self.remote = remote
         self.branch = branch
         self.push = push
@@ -142,6 +154,30 @@ class GitSink(FolderSink):
     def check_ready(self) -> None:
         if not os.path.isdir(os.path.join(self.path, ".git")):
             raise SyncError("destination is not a git clone, clone your data repo there")
+        self.check_separate()
+
+    def check_separate(self) -> None:
+        super().check_separate()
+        if not os.path.isdir(os.path.join(self.path, ".git")):
+            return
+        if self._remote_url(self.path, self.remote) in self._tool_remote_urls():
+            raise SyncError(
+                "destination pushes to the tool's own repo, "
+                "use a separate private repo for usage data"
+            )
+
+    def _tool_remote_urls(self) -> set:
+        result = self._git("-C", self.tool_root, "remote")
+        if result.returncode != 0:
+            return set()
+        names = result.stdout.split()
+        return {self._remote_url(self.tool_root, name) for name in names} - {None}
+
+    def _remote_url(self, repo: str, name: str):
+        result = self._git("-C", repo, "remote", "get-url", name)
+        if result.returncode != 0:
+            return None
+        return _normal_url(result.stdout.strip())
 
     def sync(self, today) -> str:
         self.check_ready()
@@ -254,3 +290,20 @@ class GitSink(FolderSink):
             ("git",) + args, cwd=self.path, env=self.env,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         )
+
+
+def _is_within(path: str, root: str) -> bool:
+    path, root = os.path.realpath(path), os.path.realpath(root)
+    return path == root or path.startswith(root + os.sep)
+
+
+def _normal_url(url: str) -> str:
+    """Reduces ssh and https forms of one repo URL to host/owner/name."""
+    url = url.rstrip("/")
+    if url.endswith(".git"):
+        url = url[:-4]
+    if "://" in url:
+        url = url.split("://", 1)[1]
+    elif ":" in url:
+        url = url.replace(":", "/", 1)
+    return url.split("@", 1)[-1].lower()

@@ -13,7 +13,7 @@ DEFAULTS = {
     "account": None,
     "machine_label": None,
     "sources": ["~/.claude/projects"],
-    "destination": {"type": "folder", "path": "~/usage-data"},
+    "destination": None,
     "round_ts_to_hour": False,
     "hash_agent_types": False,
     "hash_names": True,
@@ -54,6 +54,11 @@ def expand(path: str) -> str:
 
 def init_config(path, account, dest_type="folder", dest=None,
                 schedule=None, force=False) -> dict:
+    if not dest:
+        raise ConfigError(
+            "init needs --dest, the folder for your usage data "
+            "(a private place, never this tool's own repo)"
+        )
     if os.path.exists(path) and not force:
         raise ConfigError("config already exists, use --force to replace it")
     data = _initial_config(account, dest_type, dest, schedule)
@@ -64,7 +69,7 @@ def init_config(path, account, dest_type="folder", dest=None,
 
 
 def _initial_config(account, dest_type, dest, schedule) -> dict:
-    destination = {"type": dest_type, "path": dest or "~/usage-data"}
+    destination = {"type": dest_type, "path": dest}
     if dest_type == "git":
         destination.update(GIT_DEFAULTS)
     data = {key: copy.deepcopy(DEFAULTS[key]) for key in (
@@ -190,6 +195,11 @@ def _validate_sources(sources) -> None:
 
 
 def _validate_destination(destination) -> None:
+    if destination is None:
+        raise ConfigError(
+            "destination is required: set it to a private folder or git clone "
+            "for your usage data"
+        )
     if not isinstance(destination, dict):
         raise ConfigError("destination must be an object")
     if destination.get("type") not in ("folder", "git"):

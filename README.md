@@ -86,7 +86,8 @@ git clone https://github.com/<you>/claude-usage-collector ~/claude-usage-collect
 cd ~/claude-usage-collector
 
 # 1. Write a config and a fresh salt for this machine.
-./bin/claude-usage init --account work
+#    --dest is required: the folder your usage data goes to.
+./bin/claude-usage init --account work --dest ~/usage-data
 
 # 2. Look at what would be collected. Nothing is written.
 ./bin/claude-usage collect --dry-run
@@ -98,9 +99,17 @@ cd ~/claude-usage-collector
 claude-usage doctor
 ```
 
-That writes rows to `~/usage-data`, a plain folder. To combine several
-machines, point each one at a clone of a **private** git repo instead. The
-steps are in [docs/multi-account.md](docs/multi-account.md).
+**This repo is the tool only. Your data never goes in it.** `init` fails
+without `--dest`, because there is no default place for your data: you
+choose it. The example above writes rows to `~/usage-data`, a plain folder.
+To combine several machines, point each one at a clone of a separate
+**private** git repo instead. The steps are in
+[docs/multi-account.md](docs/multi-account.md).
+
+`collect`, `sync` and `doctor` refuse a destination that sits inside this
+tool's folder, or a git destination whose remote is this tool's own repo.
+They cannot tell whether your data repo is private, so make it private
+when you create it.
 
 On Linux, `install.sh` links the wrapper but does not schedule anything.
 Run `claude-usage run` from cron or a systemd timer.
@@ -113,7 +122,7 @@ from `$CLAUDE_USAGE_CONFIG`, then `~/.config/claude-usage-collector/config.json`
 
 | Command | What it does |
 |---|---|
-| `init --account LABEL [--dest-type folder\|git] [--dest PATH] [--schedule HH:MM] [--force]` | Write the config and the salt. Refuses to replace a config without `--force`, and keeps the salt even then. |
+| `init --account LABEL --dest PATH [--dest-type folder\|git] [--schedule HH:MM] [--force]` | Write the config and the salt. Fails without `--dest`. Refuses to replace a config without `--force`, and keeps the salt even then. |
 | `collect [--dry-run]` | Read new transcript lines, guard the rows of every stream, append them to the store, save read positions. `--dry-run` prints usage row counts per day, the number of context events, skill uses and catalog names, and three sample rows, and writes nothing. |
 | `sync` | For a git store: audit, commit, `pull --rebase`, push. If the audit finds a problem, nothing is committed or pushed. Does nothing for a folder store. |
 | `run` | `collect`, then the weekly cross-check for each missed completed week up to 21 days back (see [docs/cross-check.md](docs/cross-check.md)), then `sync`. This is what the daily schedule calls. |
@@ -122,7 +131,7 @@ from `$CLAUDE_USAGE_CONFIG`, then `~/.config/claude-usage-collector/config.json`
 | `analyze [--store PATH] [--since YYYY-MM-DD] [--account LABEL] [--names PATH \| --no-names]` | Print a text usage report. Shows plain names from the local name map when it exists. |
 | `report [--store PATH] [--out report.html] [--since YYYY-MM-DD] [--svg PATH] [--names PATH \| --no-names]` | Write a static HTML report. `--svg` also writes the daily chart as an SVG file. Shows plain names from the local name map when it exists, so keep the output on your machine, or pass `--no-names` for one you share. |
 | `audit [--store PATH]` | Check every file in the store: its path must fit the store layout, every CSV must have its schema's header and pass the guard, every check file must pass the guard, and `.gitattributes` must be what the tool writes. Exits non-zero on any problem, naming the path but never the value. Changes nothing. |
-| `doctor` | Check config, salt, name hashing, store, git remote, schedule, `ccusage` (against the `PATH` the launchd agent runs with) and transcript retention. Changes nothing. |
+| `doctor` | Check config, salt, name hashing, store, that the store is separate from this tool's repo, git remote, schedule, `ccusage` (against the `PATH` the launchd agent runs with) and transcript retention. Changes nothing. |
 | `status` | Show the last run time, rows collected and files tracked. |
 
 `compare`, `analyze`, `report` and `audit` also work without a config, so a research

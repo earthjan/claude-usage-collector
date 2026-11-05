@@ -270,7 +270,11 @@ What the hashes do not protect against:
   the salt and the name map directly. This tool does not change that.
 
 Keep the store in a **private** repository. Never push it to the public tool
-repo. See [multi-account.md](multi-account.md).
+repo. The tool helps here: `init` has no default store, so you must choose
+one, and `collect`, `sync` and `doctor` refuse a store inside the tool's
+folder or a git remote that is the tool's own repo. It cannot check that
+your data repo is private, so that part is up to you. See
+[multi-account.md](multi-account.md).
 
 ## How to audit it yourself
 

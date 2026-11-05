@@ -11,8 +11,9 @@ still describe your working life, so the data repo must be private.
 
 **Create a separate, private repository for the data.** Do not push rows to
 your fork or clone of `claude-usage-collector`, which is public. The tool's
-`.gitignore` ignores `*.csv` to help prevent that mistake, but a separate
-repo is the real protection.
+`.gitignore` ignores `*.csv` to help prevent that mistake, and `collect`,
+`sync` and `doctor` refuse a store whose remote is the tool's own repo, but
+a separate private repo is the real protection.
 
 ## 1. Create the private data repo
 

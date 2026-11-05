@@ -6,6 +6,8 @@ import unittest
 
 from usage_collector import config
 
+DESTINATION = {"type": "folder", "path": "~/usage-data"}
+
 
 class ConfigTestCase(unittest.TestCase):
     def setUp(self):
@@ -16,6 +18,9 @@ class ConfigTestCase(unittest.TestCase):
         self.tmp.cleanup()
 
     def write(self, data):
+        self.write_raw(dict({"destination": DESTINATION}, **data))
+
+    def write_raw(self, data):
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
         with open(self.path, "w") as handle:
             json.dump(data, handle)
@@ -43,7 +48,7 @@ class ResolvePathTest(unittest.TestCase):
 
 class InitTest(ConfigTestCase):
     def test_init_writes_config_and_private_salt(self):
-        config.init_config(self.path, account="work")
+        config.init_config(self.path, account="work", dest="~/usage-data")
         loaded = config.load_config(self.path)
         self.assertEqual(loaded["account"], "work")
         self.assertEqual(loaded["destination"], {"type": "folder", "path": "~/usage-data"})
@@ -64,30 +69,37 @@ class InitTest(ConfigTestCase):
         self.assertEqual(loaded["schedule"], "07:30")
 
     def test_init_writes_hash_names_not_the_old_alias(self):
-        config.init_config(self.path, account="work")
+        config.init_config(self.path, account="work", dest="~/usage-data")
         with open(self.path) as handle:
             written = json.load(handle)
         self.assertIs(written["hash_names"], True)
         self.assertNotIn("hash_agent_types", written)
 
     def test_init_refuses_to_overwrite_without_force(self):
-        config.init_config(self.path, account="work")
+        config.init_config(self.path, account="work", dest="~/usage-data")
         with self.assertRaises(config.ConfigError):
-            config.init_config(self.path, account="personal")
+            config.init_config(self.path, account="personal", dest="~/usage-data")
         self.assertEqual(config.load_config(self.path)["account"], "work")
 
     def test_force_overwrites_config_but_keeps_salt(self):
-        config.init_config(self.path, account="work")
+        config.init_config(self.path, account="work", dest="~/usage-data")
         with open(config.salt_path(self.path)) as handle:
             salt = handle.read()
-        config.init_config(self.path, account="personal", force=True)
+        config.init_config(self.path, account="personal", dest="~/usage-data", force=True)
         self.assertEqual(config.load_config(self.path)["account"], "personal")
         with open(config.salt_path(self.path)) as handle:
             self.assertEqual(handle.read(), salt)
 
+    def test_init_without_a_destination_writes_nothing(self):
+        with self.assertRaises(config.ConfigError) as caught:
+            config.init_config(self.path, account="work")
+        self.assertIn("--dest", str(caught.exception))
+        self.assertFalse(os.path.exists(self.path))
+        self.assertFalse(os.path.exists(config.salt_path(self.path)))
+
     def test_init_rejects_bad_account(self):
         with self.assertRaises(config.ConfigError):
-            config.init_config(self.path, account="my work account")
+            config.init_config(self.path, account="my work account", dest="~/usage-data")
         self.assertFalse(os.path.exists(self.path))
 
 
@@ -128,6 +140,12 @@ class LoadTest(ConfigTestCase):
             with self.subTest(crosscheck=crosscheck):
                 self.write({"account": "work", "crosscheck": crosscheck})
                 self.assertEqual(config.load_config(self.path)["crosscheck"], crosscheck)
+
+    def test_config_without_a_destination_fails(self):
+        self.write_raw({"account": "work"})
+        with self.assertRaises(config.ConfigError) as caught:
+            config.load_config(self.path)
+        self.assertIn("destination", str(caught.exception))
 
     def test_missing_file_raises(self):
         with self.assertRaises(config.ConfigError):

@@ -94,16 +94,26 @@ class InitTest(CliTestCase):
 
     def test_second_init_needs_force(self):
         self.init()
-        code, _out, err = self.cli("init", "--account", "personal")
+        code, _out, err = self.cli("init", "--account", "personal", "--dest", self.store)
         self.assertEqual(code, 1)
         self.assertIn("--force", err)
-        self.assertEqual(self.cli("init", "--account", "personal", "--force")[0], 0)
+        again = self.cli("init", "--account", "personal", "--dest", self.store, "--force")
+        self.assertEqual(again[0], 0)
+
+    def test_init_without_dest_fails_and_writes_nothing(self):
+        code, _out, err = self.cli("init", "--account", "work")
+        self.assertNotEqual(code, 0)
+        self.assertIn("--dest", err)
+        self.assertFalse(os.path.exists(self.config_path))
 
     def test_env_var_selects_config(self):
         self.environ["CLAUDE_USAGE_CONFIG"] = self.config_path
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
-            code = cli.main(["init", "--account", "work"], environ=self.environ, now=NOW)
+            code = cli.main(
+                ["init", "--account", "work", "--dest", self.store],
+                environ=self.environ, now=NOW,
+            )
         self.assertEqual(code, 0)
         self.assertTrue(os.path.exists(self.config_path))
 
@@ -703,6 +713,18 @@ class DoctorTest(CliTestCase):
         self.assertEqual(code, 0, out)
         self.assertNotIn("FAIL", out)
         self.assertIn("OK   ccusage", out)
+
+    def test_destination_inside_the_tool_repo_fails(self):
+        self.init()
+        self.edit_config(destination={"type": "folder", "path": os.path.join(REPO, "data")})
+        code, out, _err = self.cli("doctor")
+        self.assertNotEqual(code, 0)
+        self.assertIn("FAIL separation:", out)
+        self.assertFalse(os.path.exists(os.path.join(REPO, "data")))
+
+    def test_separate_destination_is_ok(self):
+        self.init()
+        self.assertIn("OK   separation:", self.cli("doctor")[1])
 
     def hashing_line(self):
         lines = self.cli("doctor")[1].splitlines()

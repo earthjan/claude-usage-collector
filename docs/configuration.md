@@ -1,7 +1,8 @@
 # Configuration
 
 **One JSON file per machine holds every setting. `init` writes it for you,
-and the defaults suit most people.** You only need to edit it to add a
+and the defaults suit most people, except one: where your data goes has no
+default, so you must set it.** You only need to edit it to add a
 transcript folder, switch to a git store, or tune privacy and analysis.
 
 ## Where the files are
@@ -19,7 +20,7 @@ and its own read positions.
 ## Creating it
 
 ```sh
-claude-usage init --account work
+claude-usage init --account work --dest ~/usage-data
 claude-usage init --account work --dest-type git --dest ~/usage-data --schedule 07:30
 ```
 
@@ -27,13 +28,13 @@ claude-usage init --account work --dest-type git --dest ~/usage-data --schedule 
 |---|---|---|
 | `--account LABEL` | required | Account label written into every row. |
 | `--dest-type folder\|git` | `folder` | Plain folder, or a clone of a git repo. |
-| `--dest PATH` | `~/usage-data` | Where the store lives. |
+| `--dest PATH` | required | Where the store lives. Must be outside this tool's folder. For a git store, a clone of a separate private repo. |
 | `--schedule HH:MM` | `18:00` | Daily run time, read by `install/install.sh`. |
 | `--force` | off | Replace an existing config. The existing salt is kept, so hashes do not change. |
 
 ## A full example
 
-This is what `init --account work` writes (shown compactly):
+This is what `init --account work --dest ~/usage-data` writes (shown compactly):
 
 ```json
 {
@@ -67,8 +68,8 @@ A git store looks like this:
 | `account` | none, required | Label for this account in every row. Must be a slug: starts with a letter or digit, then letters, digits, `.`, `_`, `:`, `-`, no spaces, at most 64 characters (see [schema.md](schema.md#value-rules)). |
 | `machine_label` | `null` | When `null`, the `machine` column is a salted hash of the hostname. Set a slug such as `laptop` to use that instead. It is written as is, so keep it neutral. |
 | `sources` | `["~/.claude/projects"]` | Folders that hold Claude Code project transcripts. Add one per Claude Code config folder you use. |
-| `destination.type` | `"folder"` | `folder` or `git`. |
-| `destination.path` | `"~/usage-data"` | The store folder. For `git`, a clone of your private data repo. |
+| `destination.type` | none, required | `folder` or `git`. `init` writes `folder` unless you pass `--dest-type git`. |
+| `destination.path` | none, required | The store folder. For `git`, a clone of your private data repo. A config without a `destination` fails to load. A path inside this tool's folder, or a git remote that is this tool's own repo, is refused by `collect`, `sync` and `doctor`. |
 | `destination.remote` | `"origin"` | Git only: remote to pull from and push to. |
 | `destination.branch` | `"main"` | Git only: branch to pull from and push to. |
 | `destination.push` | `true` | Git only: set `false` to commit locally without pushing. |
