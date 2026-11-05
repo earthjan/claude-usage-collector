@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="508" viewBox="0 0 960 508" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="752" viewBox="0 0 960 752" role="img" aria-labelledby="title desc">
   <title id="title">claude-usage-collector architecture</title>
-  <desc id="desc">Several machines each run three readers (usage rows, context sizes and a weekly ccusage cross-check) and a guard that turns local transcripts into number-only files, push them to one private data store, and a research machine reads that store.</desc>
+  <desc id="desc">Each machine reads its transcripts with three readers, replaces every id and name with a salted hash, checks every column with a guard, and audits every file again before a push. Only numbers and hashes reach the private data store. Transcripts, the salt, the name map and the state file stay on the machine. A research machine pulls the store and shows real names only where its own local name map knows the hash.</desc>
   <style>
     .bg { fill: #f6f8fa; }
     .card { fill: #ffffff; stroke: #d0d7de; stroke-width: 1; }
@@ -15,6 +15,10 @@
     .b { font-weight: 600; }
     .s { font-size: 12px; fill: #59636e; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .mono-s { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; fill: #59636e; }
+    .mono-v { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+    .line-orange { stroke: #bc4c00; stroke-width: 1.5; fill: none; stroke-dasharray: 4 3; }
+    .a-orange { fill: #bc4c00; }
     .num { fill: #ffffff; font-size: 12px; font-weight: 600; }
     .line { stroke: #8c959f; stroke-width: 1.5; fill: none; }
     .line-blue { stroke: #0969da; stroke-width: 1.5; fill: none; }
@@ -38,6 +42,9 @@
       .ink { fill: #9198a1; }
       text { fill: #e6edf3; }
       .s { fill: #9198a1; }
+      .mono-s { fill: #9198a1; }
+      .line-orange { stroke: #f0883e; }
+      .a-orange { fill: #f0883e; }
       .num { fill: #0d1117; }
       .line { stroke: #6e7681; }
       .line-blue { stroke: #4493f8; }
@@ -57,82 +64,125 @@
     <marker id="m-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-blue" d="M0,0 L10,5 L0,10 z"/></marker>
     <marker id="m-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-purple" d="M0,0 L10,5 L0,10 z"/></marker>
     <marker id="m-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-red" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="m-orange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-orange" d="M0,0 L10,5 L0,10 z"/></marker>
   </defs>
-  <rect class="bg" x="0" y="0" width="960" height="508" rx="16"/>
+  <rect class="bg" x="0" y="0" width="960" height="752" rx="16"/>
   <text x="32" y="40" class="h">How the pieces fit</text>
-  <text x="200" y="40" class="s">each machine runs three readers and a guard, and sends numbers only</text>
-  <rect class="card" x="32" y="68" width="420" height="188" rx="10"/>
-  <text x="48" y="92" class="b">Machine A, account: work</text>
-  <rect class="card" x="48" y="106" width="140" height="134" rx="8"/>
-  <text x="58" y="164" class="b">transcripts</text>
-  <text x="58" y="182" class="s">~/.claude/projects</text>
-  <path class="line" d="M188,127 L204,127" marker-end="url(#m-grey)"/>
-  <rect class="blue" x="206" y="106" width="150" height="42" rx="8"/>
-  <text x="216" y="124" class="b">usage rows</text>
-  <text x="216" y="140" class="s">one per message</text>
-  <path class="line" d="M356,127 L370,127" marker-end="url(#m-grey)"/>
-  <path class="line" d="M188,173 L204,173" marker-end="url(#m-grey)"/>
-  <rect class="green" x="206" y="152" width="150" height="42" rx="8"/>
-  <text x="216" y="170" class="b">context sizes</text>
-  <text x="216" y="186" class="s">lengths and counts</text>
-  <path class="line" d="M356,173 L370,173" marker-end="url(#m-grey)"/>
-  <path class="line" d="M188,219 L204,219" marker-end="url(#m-grey)"/>
-  <rect class="purple" x="206" y="198" width="150" height="42" rx="8"/>
-  <text x="216" y="216" class="b">ccusage weekly</text>
-  <text x="216" y="232" class="s">daily totals</text>
-  <path class="line" d="M356,219 L370,219" marker-end="url(#m-grey)"/>
-  <rect class="green" x="372" y="106" width="64" height="134" rx="8"/>
-  <text x="404" y="166" class="b" text-anchor="middle">guard</text>
-  <text x="404" y="186" class="s" text-anchor="middle">fail</text>
-  <text x="404" y="202" class="s" text-anchor="middle">closed</text>
-  <rect class="card" x="32" y="268" width="420" height="72" rx="10"/>
-  <text x="48" y="292" class="b">Machine B, account: work</text>
-  <rect class="blue" x="48" y="304" width="64" height="22" rx="11"/>
-  <text x="80" y="319" class="s" text-anchor="middle">usage</text>
-  <rect class="green" x="120" y="304" width="72" height="22" rx="11"/>
-  <text x="156" y="319" class="s" text-anchor="middle">context</text>
-  <rect class="purple" x="200" y="304" width="76" height="22" rx="11"/>
-  <text x="238" y="319" class="s" text-anchor="middle">ccusage</text>
-  <rect class="green" x="284" y="304" width="64" height="22" rx="11"/>
-  <text x="316" y="319" class="s" text-anchor="middle">guard</text>
-  <rect class="card" x="32" y="352" width="420" height="72" rx="10"/>
-  <text x="48" y="376" class="b">Machine C, account: personal</text>
-  <rect class="blue" x="48" y="388" width="64" height="22" rx="11"/>
-  <text x="80" y="403" class="s" text-anchor="middle">usage</text>
-  <rect class="green" x="120" y="388" width="72" height="22" rx="11"/>
-  <text x="156" y="403" class="s" text-anchor="middle">context</text>
-  <rect class="purple" x="200" y="388" width="76" height="22" rx="11"/>
-  <text x="238" y="403" class="s" text-anchor="middle">ccusage</text>
-  <rect class="green" x="284" y="388" width="64" height="22" rx="11"/>
-  <text x="316" y="403" class="s" text-anchor="middle">guard</text>
-  <path class="line-blue" d="M436,173 C458,173 458,200 476,200" marker-end="url(#m-blue)"/>
-  <path class="line-blue" d="M452,304 C466,304 466,250 476,250" marker-end="url(#m-blue)"/>
-  <path class="line-blue" d="M452,388 C470,388 470,296 476,296" marker-end="url(#m-blue)"/>
-  <rect class="card" x="478" y="96" width="250" height="236" rx="10"/>
-  <text x="494" y="124" class="h">Private data store</text>
-  <text x="494" y="144" class="s">git repo or folder, per account</text>
-  <rect class="blue" x="494" y="160" width="218" height="32" rx="8"/>
-  <text x="504" y="181" class="s">usage rows (.csv)</text>
-  <rect class="green" x="494" y="200" width="218" height="32" rx="8"/>
-  <text x="504" y="221" class="s">context sizes (.context.csv)</text>
-  <rect class="green" x="494" y="240" width="218" height="32" rx="8"/>
-  <text x="504" y="261" class="s">skill uses, catalog names</text>
-  <rect class="purple" x="494" y="280" width="218" height="32" rx="8"/>
-  <text x="504" y="301" class="s">checks/  ccusage totals</text>
-  <path class="line" d="M728,214 L758,214" marker-end="url(#m-grey)"/>
-  <text x="743" y="206" class="s" text-anchor="middle">pull</text>
-  <rect class="card" x="760" y="96" width="168" height="236" rx="10"/>
-  <text x="776" y="124" class="h">Research machine</text>
-  <text x="776" y="144" class="s">a clone of the store</text>
-  <rect class="card" x="776" y="160" width="136" height="46" rx="8"/>
-  <text x="786" y="179" class="b">analyze</text>
-  <text x="786" y="196" class="s">text breakdowns</text>
-  <rect class="card" x="776" y="216" width="136" height="46" rx="8"/>
-  <text x="786" y="235" class="b">report</text>
-  <text x="786" y="252" class="s">static HTML page</text>
-  <rect class="card" x="776" y="272" width="136" height="46" rx="8"/>
-  <text x="786" y="291" class="b">compare</text>
-  <text x="786" y="308" class="s">rows vs ccusage</text>
-  <rect class="orange" x="32" y="448" width="896" height="40" rx="10"/>
-  <text x="48" y="473" class="s">Prompts, replies, code, paths, titles, branch names and attached text never leave the machine they were written on.</text>
+  <text x="200" y="40" class="s">each machine reads, hashes, guards and audits, and sends numbers and hashes only</text>
+  <rect class="card" x="32" y="64" width="624" height="312" rx="10"/>
+  <text x="48" y="88" class="b">Machine A, account: work</text>
+  <rect class="card" x="48" y="102" width="112" height="134" rx="8"/>
+  <text x="60" y="160" class="b">transcripts</text>
+  <text x="60" y="178" class="s">~/.claude/</text>
+  <text x="60" y="194" class="s">projects</text>
+  <path class="line" d="M160,123 L174,123" marker-end="url(#m-grey)"/>
+  <rect class="blue" x="176" y="102" width="132" height="42" rx="8"/>
+  <text x="186" y="120" class="b">usage rows</text>
+  <text x="186" y="136" class="s">one per message</text>
+  <path class="line" d="M308,123 L322,123" marker-end="url(#m-grey)"/>
+  <path class="line" d="M160,169 L174,169" marker-end="url(#m-grey)"/>
+  <rect class="green" x="176" y="148" width="132" height="42" rx="8"/>
+  <text x="186" y="166" class="b">context sizes</text>
+  <text x="186" y="182" class="s">lengths and counts</text>
+  <path class="line" d="M308,169 L322,169" marker-end="url(#m-grey)"/>
+  <path class="line" d="M160,215 L174,215" marker-end="url(#m-grey)"/>
+  <rect class="purple" x="176" y="194" width="132" height="42" rx="8"/>
+  <text x="186" y="212" class="b">ccusage weekly</text>
+  <text x="186" y="228" class="s">daily totals</text>
+  <path class="line" d="M308,215 L322,215" marker-end="url(#m-grey)"/>
+  <rect class="blue" x="324" y="102" width="92" height="134" rx="8"/>
+  <text x="370" y="150" class="b" text-anchor="middle">hash</text>
+  <text x="370" y="170" class="s" text-anchor="middle">salted, ids</text>
+  <text x="370" y="186" class="s" text-anchor="middle">and every</text>
+  <text x="370" y="202" class="s" text-anchor="middle">name</text>
+  <path class="line" d="M416,169 L430,169" marker-end="url(#m-grey)"/>
+  <rect class="green" x="432" y="102" width="84" height="134" rx="8"/>
+  <text x="474" y="150" class="b" text-anchor="middle">guard</text>
+  <text x="474" y="170" class="s" text-anchor="middle">checks</text>
+  <text x="474" y="186" class="s" text-anchor="middle">each column</text>
+  <text x="474" y="206" class="s" text-anchor="middle">fail closed</text>
+  <path class="line" d="M516,169 L530,169" marker-end="url(#m-grey)"/>
+  <rect class="red" x="532" y="102" width="108" height="134" rx="8"/>
+  <text x="586" y="150" class="b" text-anchor="middle">audit</text>
+  <text x="586" y="170" class="s" text-anchor="middle">every file again</text>
+  <text x="586" y="186" class="s" text-anchor="middle">before commit</text>
+  <text x="586" y="202" class="s" text-anchor="middle">and push</text>
+  <path class="line-orange" d="M370,236 L370,258" marker-end="url(#m-orange)"/>
+  <rect class="orange" x="48" y="262" width="592" height="98" rx="8"/>
+  <text x="64" y="284" class="b">Stays on this machine, never pushed</text>
+  <text x="64" y="312" class="b">transcripts</text>
+  <text x="64" y="330" class="s">prompts, code, paths</text>
+  <text x="64" y="346" class="s">deleted after 30 days</text>
+  <text x="208" y="312" class="b">salt</text>
+  <text x="208" y="330" class="s">secret key behind</text>
+  <text x="208" y="346" class="s">every hash</text>
+  <text x="352" y="312" class="b">names.json</text>
+  <text x="352" y="330" class="s">hash to real name,</text>
+  <text x="352" y="346" class="s">read by your reports</text>
+  <text x="500" y="312" class="b">state file</text>
+  <text x="500" y="330" class="s">offsets, seen ids</text>
+  <rect class="card" x="32" y="392" width="624" height="56" rx="10"/>
+  <text x="48" y="425" class="b">Machine B, account: work</text>
+  <rect class="blue" x="272" y="409" width="54" height="22" rx="11"/>
+  <text x="299" y="424" class="s" text-anchor="middle">usage</text>
+  <rect class="green" x="331" y="409" width="62" height="22" rx="11"/>
+  <text x="362" y="424" class="s" text-anchor="middle">context</text>
+  <rect class="purple" x="398" y="409" width="66" height="22" rx="11"/>
+  <text x="431" y="424" class="s" text-anchor="middle">ccusage</text>
+  <rect class="blue" x="469" y="409" width="46" height="22" rx="11"/>
+  <text x="492" y="424" class="s" text-anchor="middle">hash</text>
+  <rect class="green" x="520" y="409" width="50" height="22" rx="11"/>
+  <text x="545" y="424" class="s" text-anchor="middle">guard</text>
+  <rect class="red" x="575" y="409" width="50" height="22" rx="11"/>
+  <text x="600" y="424" class="s" text-anchor="middle">audit</text>
+  <rect class="card" x="32" y="460" width="624" height="56" rx="10"/>
+  <text x="48" y="493" class="b">Machine C, account: personal</text>
+  <rect class="blue" x="272" y="477" width="54" height="22" rx="11"/>
+  <text x="299" y="492" class="s" text-anchor="middle">usage</text>
+  <rect class="green" x="331" y="477" width="62" height="22" rx="11"/>
+  <text x="362" y="492" class="s" text-anchor="middle">context</text>
+  <rect class="purple" x="398" y="477" width="66" height="22" rx="11"/>
+  <text x="431" y="492" class="s" text-anchor="middle">ccusage</text>
+  <rect class="blue" x="469" y="477" width="46" height="22" rx="11"/>
+  <text x="492" y="492" class="s" text-anchor="middle">hash</text>
+  <rect class="green" x="520" y="477" width="50" height="22" rx="11"/>
+  <text x="545" y="492" class="s" text-anchor="middle">guard</text>
+  <rect class="red" x="575" y="477" width="50" height="22" rx="11"/>
+  <text x="600" y="492" class="s" text-anchor="middle">audit</text>
+  <path class="line-blue" d="M640,169 L674,169" marker-end="url(#m-blue)"/>
+  <path class="line-blue" d="M656,420 C668,420 664,300 674,300" marker-end="url(#m-blue)"/>
+  <path class="line-blue" d="M656,488 C672,488 664,324 674,324" marker-end="url(#m-blue)"/>
+  <rect class="card" x="676" y="64" width="252" height="272" rx="10"/>
+  <text x="692" y="92" class="h">Private data store</text>
+  <text x="692" y="112" class="s">private git repo, per account</text>
+  <rect class="blue" x="692" y="128" width="220" height="32" rx="8"/>
+  <text x="702" y="149" class="s">usage rows (.csv)</text>
+  <rect class="green" x="692" y="168" width="220" height="32" rx="8"/>
+  <text x="702" y="189" class="s">context sizes (.context.csv)</text>
+  <rect class="green" x="692" y="208" width="220" height="32" rx="8"/>
+  <text x="702" y="229" class="s">skill uses, catalog names</text>
+  <rect class="purple" x="692" y="248" width="220" height="32" rx="8"/>
+  <text x="702" y="269" class="s">checks/  ccusage totals</text>
+  <text x="692" y="304" class="s">names and ids appear as hashes</text>
+  <text x="692" y="322" class="s">nothing lands here unaudited</text>
+  <path class="line" d="M802,336 L802,354" marker-end="url(#m-grey)"/>
+  <text x="812" y="350" class="s">pull</text>
+  <rect class="card" x="676" y="356" width="252" height="188" rx="10"/>
+  <text x="692" y="382" class="h">Research machine</text>
+  <text x="692" y="400" class="s">a clone of the store</text>
+  <rect class="card" x="692" y="412" width="220" height="30" rx="8"/>
+  <text x="702" y="432" class="b">analyze</text><text x="772" y="432" class="s">text breakdowns</text>
+  <rect class="card" x="692" y="448" width="220" height="30" rx="8"/>
+  <text x="702" y="468" class="b">report</text><text x="772" y="468" class="s">static HTML page</text>
+  <rect class="card" x="692" y="484" width="220" height="30" rx="8"/>
+  <text x="702" y="504" class="b">compare</text><text x="772" y="504" class="s">rows vs ccusage</text>
+  <text x="692" y="534" class="s">names show only via names.json</text>
+  <rect class="card" x="32" y="560" width="896" height="116" rx="10"/>
+  <text x="48" y="584" class="b">What actually leaves: one usage row, as stored (some columns left out)</text>
+  <text y="608" class="mono-s"><tspan x="48">ts</tspan><tspan x="208">account</tspan><tspan x="270">project</tspan><tspan x="370">agent_type</tspan><tspan x="470">model</tspan><tspan x="602">input</tspan><tspan x="652">cache_read</tspan><tspan x="742">output</tspan><tspan x="806">tools</tspan></text>
+  <text y="626" class="mono-v"><tspan x="48">2026-03-03T09:14:07Z</tspan><tspan x="208">work</tspan><tspan x="270">3f9a1c0e7b2d</tspan><tspan x="370">c41e07f2a9d3</tspan><tspan x="470">claude-opus-5-5</tspan><tspan x="602">12</tspan><tspan x="652">84120</tspan><tspan x="742">640</tspan><tspan x="806">5e1b9a7c3d20</tspan></text>
+  <text x="48" y="650" class="s">Every id and name is a salted 12-character hash. Every other cell is a number, a time, a model name or a fixed label.</text>
+  <text x="48" y="666" class="s">The guard refuses to write anything else, and the audit refuses to push anything else.</text>
+  <rect class="orange" x="32" y="692" width="896" height="40" rx="10"/>
+  <text x="48" y="717" class="s">Prompts, replies, code, paths, titles, branch names, attached text and real names never leave the machine they were written on.</text>
 </svg>
