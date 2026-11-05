@@ -139,7 +139,7 @@ machine only needs a clone of the store:
 - [Cross-check](docs/cross-check.md): how `ccusage` is used to check the numbers.
 - [Analysis](docs/analysis.md): `analyze`, `report`, starting context, weights and prices.
 
-## FAQ
+## Helpful questions
 
 ### Why not just use ccusage?
 
