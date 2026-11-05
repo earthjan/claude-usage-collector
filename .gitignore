@@ -8,6 +8,8 @@ config.local.json
 *.local.json
 salt
 state.json
+names.json
+names.json.bad
 *.tmp
 
 # Usage data stays out of the tool repo, except synthetic test fixtures

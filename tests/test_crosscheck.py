@@ -385,5 +385,125 @@ class CompareCommandTest(unittest.TestCase):
         self.assertIn("--store", err.getvalue())
 
 
+
+
+class VersionManagedCommandTest(unittest.TestCase):
+    """A command whose interpreter sits beside it, run with launchd's bare PATH."""
+
+    def setUp(self):
+        self.tmp = support.TempDir()
+        self.store = self.tmp.join("store")
+        self.environ = {"PATH": "/usr/bin:/bin", "HOME": self.tmp.join("home")}
+        self.payload = self.tmp.join("payload.json")
+        with open(self.payload, "w") as handle:
+            json.dump(DAILY, handle)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def write_script(self, path: str, text: str) -> str:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as handle:
+            handle.write(text)
+        os.chmod(path, 0o755)
+        return path
+
+    def fake_tool(self, folder: str) -> str:
+        return self.write_script(os.path.join(folder, "ccusage"), "#!/usr/bin/env fakeinterp\n")
+
+    def fake_interpreter(self, folder: str) -> None:
+        self.write_script(
+            os.path.join(folder, "fakeinterp"), '#!/bin/sh\ncat "%s"\n' % self.payload)
+
+    def run_check(self, command: str):
+        config = {
+            "account": "work",
+            "destination": {"type": "folder", "path": self.store},
+            "crosscheck": {"command": command, "enabled": True},
+        }
+        out, err = io.StringIO(), io.StringIO()
+        args = argparse.Namespace(month="2026-02", week=None)
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = crosscheck.cmd_crosscheck(
+                args, config, environ=self.environ, today=date(2026, 3, 10),
+                machine="laptop-1", salt=support.SALT,
+            )
+        return code, err.getvalue()
+
+    def stored(self):
+        path = os.path.join(self.store, "checks", "work", "laptop-1", "2026-02.json")
+        with open(path) as handle:
+            return json.load(handle)
+
+    def test_absolute_path_finds_the_interpreter_beside_it(self):
+        folder = self.tmp.join("node", "bin")
+        self.fake_interpreter(folder)
+        code, err = self.run_check(self.fake_tool(folder))
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.stored(), EXPECTED)
+
+    def test_tilde_path_is_expanded_against_home(self):
+        folder = os.path.join(self.environ["HOME"], "node", "bin")
+        self.fake_interpreter(folder)
+        self.fake_tool(folder)
+        code, err = self.run_check("~/node/bin/ccusage")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.stored(), EXPECTED)
+
+    def test_symlink_finds_the_interpreter_beside_the_real_file(self):
+        real = self.tmp.join("node", "lib")
+        self.fake_interpreter(real)
+        link = self.tmp.join("links", "ccusage")
+        os.makedirs(os.path.dirname(link))
+        os.symlink(self.fake_tool(real), link)
+        code, err = self.run_check(link)
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.stored(), EXPECTED)
+
+    def test_symlink_finds_the_interpreter_beside_the_link(self):
+        bin_folder = self.tmp.join("node", "bin")
+        self.fake_interpreter(bin_folder)
+        link = os.path.join(bin_folder, "ccusage")
+        os.symlink(self.fake_tool(self.tmp.join("node", "lib", "pkg")), link)
+        code, err = self.run_check(link)
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.stored(), EXPECTED)
+
+    def test_missing_absolute_path_is_an_error_that_does_not_echo_it(self):
+        missing = self.tmp.join("nowhere", "ccusage")
+        code, err = self.run_check(missing)
+        self.assertEqual(code, 1)
+        self.assertIn("not found", err)
+        self.assertNotIn(missing, err)
+
+
+class ResolveCommandTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = support.TempDir()
+        self.home = self.tmp.join("home")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def tool(self, *parts) -> str:
+        path = self.tmp.join(*parts)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as handle:
+            handle.write("#!/bin/sh\nexit 0\n")
+        os.chmod(path, 0o755)
+        return path
+
+    def test_a_tilde_path_resolves_against_home(self):
+        path = self.tool("home", "bin", "ccusage")
+        environ = {"HOME": self.home, "PATH": "/usr/bin"}
+        self.assertEqual(crosscheck.resolve_command("~/bin/ccusage", environ), path)
+
+    def test_a_tilde_user_path_is_not_glued_onto_home(self):
+        self.tool("homenosuchuser-7f3", "bin", "ccusage")
+        environ = {"HOME": self.home, "PATH": "/usr/bin"}
+        command = "~nosuchuser-7f3/bin/ccusage"
+        self.assertIsNone(crosscheck.resolve_command(command, environ))
+
+
 if __name__ == "__main__":
     unittest.main()

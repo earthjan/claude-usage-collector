@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="268" viewBox="0 0 960 268" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="326" viewBox="0 0 960 326" role="img" aria-labelledby="title desc">
   <title id="title">Daily run pipeline</title>
-  <desc id="desc">claude-usage run reads new transcript lines, extracts usage rows and context sizes from allowlisted fields, guards every column of every file, writes day files, runs the weekly ccusage cross-check, then pushes. A guard failure writes nothing.</desc>
+  <desc id="desc">claude-usage run reads new transcript lines, extracts usage rows and context sizes from allowlisted fields, guards every column of every file, writes day files, runs the weekly ccusage cross-check, then audits, commits, rebases and pushes a git store. A guard failure writes nothing. An audit failure commits and pushes nothing.</desc>
   <style>
     .bg { fill: #f6f8fa; }
     .card { fill: #ffffff; stroke: #d0d7de; stroke-width: 1; }
@@ -58,7 +58,7 @@
     <marker id="m-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-purple" d="M0,0 L10,5 L0,10 z"/></marker>
     <marker id="m-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-red" d="M0,0 L10,5 L0,10 z"/></marker>
   </defs>
-  <rect class="bg" x="0" y="0" width="960" height="268" rx="16"/>
+  <rect class="bg" x="0" y="0" width="960" height="326" rx="16"/>
   <text x="24" y="38" class="h">One daily run</text>
   <text x="140" y="38" class="s">claude-usage run, started by launchd at your schedule time</text>
   <rect class="card" x="24" y="60" width="160" height="110" rx="10"/>
@@ -92,13 +92,16 @@
   <rect class="card" x="776" y="60" width="160" height="110" rx="10"/>
   <circle class="dot-blue" cx="802" cy="86" r="11"/>
   <text x="802" y="90" class="num" text-anchor="middle">5</text>
-  <text x="822" y="91" class="h">Push</text>
-  <text x="792" y="124" class="s">commit, rebase</text>
-  <text x="792" y="144" class="s">push (git store)</text>
+  <text x="822" y="91" class="h">Push (git)</text>
+  <text x="792" y="124" class="s">audit, commit,</text>
+  <text x="792" y="144" class="s">rebase, audit, push</text>
   <path class="line-red" d="M480,170 L480,206" marker-end="url(#m-red)"/>
-  <rect class="red" x="236" y="208" width="420" height="40" rx="10"/>
-  <text x="250" y="233" class="s">Guard fails: no file written, exit 1, offsets kept</text>
-  <path class="line-purple" d="M856,206 L856,172" marker-end="url(#m-purple)"/>
-  <rect class="purple" x="676" y="208" width="260" height="40" rx="10"/>
-  <text x="690" y="233" class="s">Once a week: ccusage cross-check</text>
+  <rect class="red" x="212" y="208" width="360" height="40" rx="10"/>
+  <text x="226" y="233" class="s">Guard fails: no file written, exit 1, offsets kept</text>
+  <path class="line-purple" d="M800,206 L800,172" marker-end="url(#m-purple)"/>
+  <rect class="purple" x="596" y="208" width="260" height="40" rx="10"/>
+  <text x="610" y="233" class="s">Once a week: ccusage cross-check</text>
+  <path class="line-red" d="M900,170 L900,264" marker-end="url(#m-red)"/>
+  <rect class="red" x="596" y="266" width="340" height="40" rx="10"/>
+  <text x="610" y="291" class="s">Audit fails: nothing pushed, exit 1</text>
 </svg>

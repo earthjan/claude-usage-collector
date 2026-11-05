@@ -28,19 +28,29 @@ agent descriptions, file paths, project names and branch names stay where
 they were written. So does the text of your instruction files, skills,
 listings, hook output and system prompt: only its length is counted.
 
-Three things make that hold:
+Four things make that hold:
 
 - **An allowlist.** The extractor reads a fixed list of fields from each
   transcript line and ignores everything else, including fields Claude Code
   adds in future versions.
-- **Salted hashes.** Project, session, agent and machine names become a
-  12 character HMAC-SHA256 hash. The key (the salt) is created on your
-  machine and never written to the store.
+- **Salted hashes.** Project, session, agent and machine names, and by
+  default every tool, skill and agent type name, become a 12 character
+  HMAC-SHA256 hash. The key (the salt) is created on your machine and
+  never written to the store. A local name map (`names.json`, never
+  synced) lets `analyze` and `report` show the plain names on your own
+  machine.
 - **A fail-closed guard.** Every row of every file passes a strict check
   of every column before it is written. Each file kind has its own schema.
   One bad value anywhere means nothing is written and the run exits
   non-zero. Error messages name the file kind, row and column, never the
   value.
+- **An audit before every push.** Before a git store commits, every file
+  the commit could carry is read back and checked again, in full, against
+  the store layout and the guard. Right before the push, every file the
+  push carries is checked again as git stored it. Any stray file, wrong
+  header, plain name or bad row stops the push. `claude-usage audit` runs
+  the same check on every file in a store folder, including committed
+  and git-ignored ones.
 
 You can see exactly what would leave with `claude-usage collect --dry-run`.
 The full details, including what the hashes do not protect, are in
@@ -105,16 +115,17 @@ from `$CLAUDE_USAGE_CONFIG`, then `~/.config/claude-usage-collector/config.json`
 |---|---|
 | `init --account LABEL [--dest-type folder\|git] [--dest PATH] [--schedule HH:MM] [--force]` | Write the config and the salt. Refuses to replace a config without `--force`, and keeps the salt even then. |
 | `collect [--dry-run]` | Read new transcript lines, guard the rows of every stream, append them to the store, save read positions. `--dry-run` prints usage row counts per day, the number of context events, skill uses and catalog names, and three sample rows, and writes nothing. |
-| `sync` | For a git store: commit, `pull --rebase`, push. Does nothing for a folder store. |
+| `sync` | For a git store: audit, commit, `pull --rebase`, push. If the audit finds a problem, nothing is committed or pushed. Does nothing for a folder store. |
 | `run` | `collect`, then the weekly cross-check for each missed completed week up to 21 days back (see [docs/cross-check.md](docs/cross-check.md)), then `sync`. This is what the daily schedule calls. |
 | `crosscheck [--week YYYY-Www] [--month YYYY-MM]` | Ask `ccusage` for daily totals of one ISO week (default: the last completed week, or month when `crosscheck.period` is `month`) or one month, and store them under `checks/`. |
 | `compare [--store PATH] [--week YYYY-Www] [--month YYYY-MM] [--tolerance 0.02]` | Compare summed rows with the `ccusage` totals. Without `--week` or `--month` it checks every stored period. Exits non-zero if any gap is over the tolerance. |
-| `analyze [--store PATH] [--since YYYY-MM-DD] [--account LABEL]` | Print a text usage report. |
-| `report [--store PATH] [--out report.html] [--since YYYY-MM-DD] [--svg PATH]` | Write a static HTML report. `--svg` also writes the daily chart as an SVG file. |
-| `doctor` | Check config, salt, store, git remote, schedule, `ccusage` and transcript retention. Changes nothing. |
+| `analyze [--store PATH] [--since YYYY-MM-DD] [--account LABEL] [--names PATH \| --no-names]` | Print a text usage report. Shows plain names from the local name map when it exists. |
+| `report [--store PATH] [--out report.html] [--since YYYY-MM-DD] [--svg PATH] [--names PATH \| --no-names]` | Write a static HTML report. `--svg` also writes the daily chart as an SVG file. Shows plain names from the local name map when it exists, so keep the output on your machine, or pass `--no-names` for one you share. |
+| `audit [--store PATH]` | Check every file in the store: its path must fit the store layout, every CSV must have its schema's header and pass the guard, every check file must pass the guard, and `.gitattributes` must be what the tool writes. Exits non-zero on any problem, naming the path but never the value. Changes nothing. |
+| `doctor` | Check config, salt, name hashing, store, git remote, schedule, `ccusage` (against the `PATH` the launchd agent runs with) and transcript retention. Changes nothing. |
 | `status` | Show the last run time, rows collected and files tracked. |
 
-`compare`, `analyze` and `report` also work without a config, so a research
+`compare`, `analyze`, `report` and `audit` also work without a config, so a research
 machine only needs a clone of the store:
 `claude-usage report --store ~/usage-data`.
 
@@ -179,10 +190,18 @@ catch up on a week that started 21 days ago), or below 62 when
 
 Pull the repo and keep your config and state. Old config keys keep
 working, and a config without `crosscheck.period` uses the weekly check.
-`hash_agent_types` is now an alias of `hash_names`, so with it set to
-`true` tool names in usage rows are hashed too, as are skill and catalog
-names. Rows written before the upgrade keep their plain tool names, so a
-per-tool breakdown splits at the upgrade date. The first run after the
+Every name is now hashed by default (`hash_names` defaults to `true`). An
+older `"hash_agent_types": false` is ignored, and a `true` on either key
+hashes. A config written by an older `init` may hold `"hash_names": false`:
+that stays off, and `claude-usage doctor` warns, so set it to `true` by
+hand (see
+[docs/configuration.md](docs/configuration.md#which-key-decides-whether-names-are-hashed)).
+Once names are hashed, rows written before the switch keep their plain
+names, so per-name figures in the store split at the switch date. On the
+machine that collected them, `analyze` and `report` show the plain names
+from the local name map, which joins the two halves again. The map is
+`names.json` beside your config, and it never leaves your machine (see
+[docs/privacy.md](docs/privacy.md#the-local-name-map)). The first run after the
 upgrade reads context sizes, skill uses and listed names from the start of
 every transcript still on disk, and carries on with usage rows where it
 left off, so no usage row is written twice. That first run is slower and
@@ -210,6 +229,11 @@ It depends on where it failed.
   is written and the read positions do not move, so the next run tries the
   same lines again. A guard failure names the transcript file the bad row
   came from.
+- **In the audit before a push** (a stray file in the clone, a file
+  edited by hand, a row that does not pass the guard): nothing is
+  committed or pushed. The rows are in the store and the read positions
+  have moved, so fix or remove the file the message names and run
+  `claude-usage sync`.
 - **During sync** (offline, a push is refused, a rebase conflict): the
   rows are already in the store and committed locally, and the read
   positions have moved. The next run pushes them.

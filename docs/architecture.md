@@ -19,7 +19,7 @@ a git store.
 
 `claude-usage run` is what the schedule calls. It does five things in order.
 
-![Read, extract usage rows and context sizes, guard, write, push. A guard failure writes nothing and keeps offsets. The weekly cross-check runs before the push.](img/daily-run.svg)
+![Read, extract usage rows and context sizes, guard, write, then audit, commit, rebase and push for a git store. A guard failure writes nothing and keeps offsets. An audit failure pushes nothing. The weekly cross-check runs before the push.](img/daily-run.svg)
 
 1. **Read.** For each transcript file it seeks to the byte offset saved by
    the last run and reads up to the last newline. A line Claude Code is
@@ -42,7 +42,11 @@ a git store.
    `.catalog.csv`. All of them are staged first and moved into place
    together. Only after the write succeeds are the new offsets, seen
    message ids and marks saved.
-5. **Push.** For a git store: add, commit, `pull --rebase`, push.
+5. **Push.** For a git store: audit, add, commit, `pull --rebase`, audit
+   again, push. The first audit reads back every file the commit could
+   carry, and the second reads every file the push carries as git stored
+   it, so nothing reaches the remote without passing a second check (see
+   [Git sync](#git-sync)).
 
 Between write and push, `run` also stores the last completed ISO week's
 `ccusage` totals if that has not been done yet, catching up on missed weeks
@@ -61,7 +65,8 @@ The package is `usage_collector/`. Each module has one job.
 | `cli.py` | The `argparse` commands and the wiring between modules. |
 | `config.py` | Load and validate the JSON config, fill defaults, write it at `init`. |
 | `hashing.py` | Create and load the salt. Hash a value to 12 hex characters with HMAC-SHA256. |
-| `names.py` | The one name policy for agent types, skills, catalog names and tools: keep a slug, hash anything else, or hash all with `hash_names`. |
+| `names.py` | The one name policy for agent types, skills, catalog names and tools: hash every name with `hash_names` (the default), or keep a slug and hash anything else. It remembers each hashed pair for the name map. |
+| `name_map.py` | The local-only map from hashes back to plain names: merged and written beside the config by `collect`, read by `analyze` and `report` for display, refused inside the destination. |
 | `models.py` | Normalise a model id, shared by rows and cross-check totals. |
 | `state.py` | Local bookkeeping: byte offsets per file and per stream, seen message ids, stream marks, last run, last cross-checked week and month. |
 | `extract.py` | Find transcript files, read new lines, build usage rows from allowlisted fields, and hand every line to the stream readers. |
@@ -69,6 +74,7 @@ The package is `usage_collector/`. Each module has one job.
 | `context.py` | Measure one context's attachments as character lengths and counts. |
 | `streams.py` | The context, skill use and catalog readers, and their dedupe. |
 | `guard.py` | The fail-closed validator: one schema per stream, plus cross-check totals. |
+| `audit.py` | Check every file in a store against the layout and the guard, read back from disk or, before a push, from git objects. Used by `audit` and twice in every git sync. |
 | `sinks.py` | Write every stream's day files to a folder, and for a git store, sync it. |
 | `doctor.py` | Read-only health checks for `claude-usage doctor`. |
 | `periods.py` | ISO weeks and calendar months in UTC, and which weeks are due for a cross-check. |
@@ -199,10 +205,24 @@ dropped: the compaction was already counted in the parent.
 
 ## Git sync
 
-**The git store syncs in the order add, commit, `pull --rebase`, push.**
+**The git store syncs in the order audit, add, commit, `pull --rebase`,
+audit again, push.**
 Pulling first would fail, because `collect` has already written files into
 the working tree by then.
 
+- The audit runs first. It lists every staged, changed or untracked file
+  in the clone with `git status`, and checks each one in full against the
+  store layout and the guard (see
+  [privacy.md](privacy.md#4-the-audit-checks-every-file-again-before-a-push)).
+  Any problem stops the sync before the commit, so nothing is committed or
+  pushed, the state file is untouched, and the run exits non-zero.
+- The second audit runs right before the push. It lists every file that
+  changed between the remote branch and `HEAD` (or every tracked file when
+  the remote branch does not exist yet) with `git ls-tree` and `git diff`,
+  and checks each one as git stored it, read with `git cat-file`. A local
+  commit made by hand, or a git filter that changed a file while it was
+  committed, is caught here. A tracked link or embedded repository fails
+  too. Any problem stops the push.
 - The sink writes a `.gitattributes` file with `*.csv merge=union`. Two
   machines on the same account that append to the same day file then merge
   cleanly, with no repeated header.

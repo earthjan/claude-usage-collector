@@ -4,9 +4,9 @@ import json
 import os
 import subprocess
 
-from . import guard, periods
+from . import audit, guard, periods
+from .audit import GIT_ATTRIBUTES
 
-GIT_ATTRIBUTES = "*.csv merge=union\n"
 FILE_SUFFIXES = {
     "usage": ".csv", "context": ".context.csv",
     "skills": ".skills.csv", "catalog": ".catalog.csv",
@@ -31,19 +31,21 @@ class SyncError(Exception):
 def make_sink(config: dict, env=None):
     destination = config["destination"]
     path = os.path.expanduser(destination["path"])
+    hashed_names = config.get("hash_names", True)
     if destination["type"] == "git":
         return GitSink(
             path, config["account"], destination.get("remote", "origin"),
             destination.get("branch", "main"), destination.get("push", True),
-            env=env,
+            env=env, hashed_names=hashed_names,
         )
-    return FolderSink(path, config["account"])
+    return FolderSink(path, config["account"], hashed_names)
 
 
 class FolderSink:
-    def __init__(self, path: str, account: str):
+    def __init__(self, path: str, account: str, hashed_names=False):
         self.path = path
         self.account = account
+        self.hashed_names = hashed_names
 
     def check_ready(self) -> None:
         pass
@@ -53,7 +55,7 @@ class FolderSink:
 
     def write_streams(self, batches: dict) -> list:
         """Writes every day file of every stream or none, so a retry never repeats rows."""
-        problems = guard.validate_streams(batches)
+        problems = guard.validate_streams(batches, self.hashed_names)
         if problems:
             raise GuardError(problems)
         staged = []
@@ -130,8 +132,8 @@ def _group_by_day(rows) -> dict:
 
 
 class GitSink(FolderSink):
-    def __init__(self, path, account, remote, branch, push, env=None):
-        super().__init__(path, account)
+    def __init__(self, path, account, remote, branch, push, env=None, hashed_names=False):
+        super().__init__(path, account, hashed_names)
         self.remote = remote
         self.branch = branch
         self.push = push
@@ -143,13 +145,64 @@ class GitSink(FolderSink):
 
     def sync(self, today) -> str:
         self.check_ready()
+        self._audit()
         self._ensure_union_merge()
         committed = self._commit(today)
-        if self._remote_branch_exists():
-            self._pull()
+        base = self._pull() if self._remote_branch_exists() else None
         if self.push:
+            self._audit_outgoing(base)
             self._git_or_fail("push failed", "push", "-q", self.remote, "HEAD:" + self.branch)
         return "committed new rows" if committed else "no new rows to commit"
+
+    def _audit_outgoing(self, base) -> None:
+        """Checks every file the push carries, as git stored it, not as it sits on disk."""
+        if self._git("rev-parse", "--verify", "-q", "HEAD").returncode != 0:
+            return
+        entries = self._tree_entries()
+        if base:
+            changed = set(self._changed_since(base))
+            entries = [entry for entry in entries if entry[1] in changed]
+        problems = audit.audit_committed(entries, self._read_blob, self.hashed_names)
+        if problems:
+            raise audit.AuditError(problems)
+
+    def _tree_entries(self) -> list:
+        result = self._git_or_fail("git ls-tree failed", "ls-tree", "-r", "-z", "HEAD")
+        entries = []
+        for line in result.stdout.split("\0"):
+            if line:
+                meta, relative = line.split("\t", 1)
+                mode, _kind, object_id = meta.split(" ")
+                entries.append((mode, relative, object_id))
+        return entries
+
+    def _changed_since(self, base: str) -> list:
+        result = self._git_or_fail(
+            "git diff failed", "diff", "--name-only", "-z", "--no-renames",
+            "--diff-filter=d", base, "HEAD",
+        )
+        return [path for path in result.stdout.split("\0") if path]
+
+    def _read_blob(self, object_id: str) -> bytes:
+        result = subprocess.run(
+            ("git", "cat-file", "blob", object_id), cwd=self.path, env=self.env,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        if result.returncode != 0:
+            raise SyncError("git cat-file failed")
+        return result.stdout
+
+    def _audit(self) -> None:
+        """Checks every file a commit could carry, in full, before anything is committed."""
+        problems = audit.audit_paths(self.path, self._pending_paths(), self.hashed_names)
+        if problems:
+            raise audit.AuditError(problems)
+
+    def _pending_paths(self) -> list:
+        result = self._git_or_fail(
+            "git status failed", "status", "--porcelain", "-z", "-uall", "--no-renames"
+        )
+        return [entry[3:] for entry in result.stdout.split("\0") if entry]
 
     def _ensure_union_merge(self) -> None:
         path = os.path.join(self.path, ".gitattributes")
@@ -181,11 +234,14 @@ class GitSink(FolderSink):
         )
         return bool(result.stdout.strip())
 
-    def _pull(self) -> None:
+    def _pull(self) -> str:
+        """Rebases onto the remote branch and returns the remote tip it fetched."""
         result = self._git(*GIT_IDENTITY, "pull", "-q", "--rebase", self.remote, self.branch)
         if result.returncode != 0:
             self._git("rebase", "--abort")
             raise SyncError("pull --rebase failed, rebase aborted, will retry next run")
+        tip = self._git_or_fail("git rev-parse failed", "rev-parse", "FETCH_HEAD")
+        return tip.stdout.strip()
 
     def _git_or_fail(self, reason: str, *args):
         result = self._git(*args)

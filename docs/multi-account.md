@@ -79,9 +79,17 @@ Run `git pull` in `~/usage-data` before each look to get the latest rows.
 
 ## Matching hashes across machines
 
-**By default each machine has its own salt, so the same project gets a
-different hash on each one.** That is the most private choice. It also means
-analysis cannot tell that a project on two machines is the same project.
+**By default each machine has its own salt, so the same project, skill or
+agent type gets a different hash on each one.** That is the most private
+choice. It also means analysis cannot tell that a project on two machines
+is the same project, and a machine's name map turns only its own hashes
+back into names.
+
+Sharing one salt between your own machines is an option. It makes every
+hash match, so one name map shows plain names for every machine's rows,
+and per-name figures line up. The cost is that one leaked salt exposes
+every machine's rows to guessing, not just one. Share it only between
+machines you own and trust equally.
 
 If you want hashes to match, share one salt before running `init` on the
 next machine. `init` keeps a salt file it finds in the config folder:
@@ -95,6 +103,10 @@ chmod 600 ~/.config/claude-usage-collector/salt
 ```
 
 Machine hashes still differ, because they come from each hostname.
+Each machine still keeps its own `names.json`. To read names from all of
+them in one place, merge their maps by hand on the research machine and
+pass it with `--names` to `analyze` or `report`. Copy maps only over a secure channel, and
+never into the store.
 Anyone with the shared salt can test guesses against every machine's hashes,
 so treat it like a private key.
 
@@ -141,5 +153,15 @@ rebase is aborted, the run exits non-zero, and the local commit stays.
   `claude-usage sync`.
 
 Only the collector's own paths (`.gitattributes`, your account folder and
-`checks/<account>/`) are ever committed. Anything else you stage in the
-clone by hand is left alone.
+`checks/<account>/`) are ever committed. Before that, every file that git
+sees as new or changed anywhere in the clone is audited, and before the
+push every file the push carries is audited again, as git stored it. A
+file that does not fit the store layout (a note, a script, a stray
+`.DS_Store` unless your gitignore already skips it) stops the sync, even
+if it would not be committed, so keep the clone for data only. A commit
+you made by hand in the clone stops it too.
+
+`claude-usage audit` shows what is wrong without changing anything. It
+checks every file in the store folder, including committed and
+git-ignored ones. The check before a push covers only files git sees as
+new or changed, and the files the push carries.

@@ -5,12 +5,13 @@ import subprocess
 import unittest
 from datetime import date
 
-from usage_collector import guard, sinks
+from usage_collector import audit, guard, sinks
 
 from tests import support
 from tests.test_guard import catalog_row, context_row, skill_row, valid_row
 
 TODAY = date(2026, 3, 10)
+CANARY = "CANARY_SYNC_7f3"
 TOTALS = {"2026-03-01": {"claude-opus-5-5": {
     "input": 1, "output": 2, "cache_read": 3, "cache_write": 4}}}
 
@@ -117,6 +118,15 @@ class FolderSinkTest(unittest.TestCase):
                          ["context row 0: column event is invalid"])
         self.assertFalse(os.path.exists(self.store))
 
+    def test_a_sink_that_hashes_names_refuses_slug_names(self):
+        sink = sinks.FolderSink(self.store, "work", hashed_names=True)
+        with self.assertRaises(sinks.GuardError) as caught:
+            sink.write_streams({"skills": [skill_row()]})
+        self.assertEqual(caught.exception.problems,
+                         ["skills row 0: column skill is invalid"])
+        self.assertFalse(os.path.exists(self.store))
+        sink.write_streams({"skills": [skill_row(skill="0123456789ab")]})
+
     def test_sync_is_a_no_op(self):
         self.assertIn("nothing to sync", self.sink.sync(TODAY))
 
@@ -214,15 +224,146 @@ class GitSinkTest(unittest.TestCase):
 
     def test_sync_commits_only_collector_paths(self):
         sink = self.clone("a", "work")
+        other = os.path.join(sink.path, "personal", "2026", "01", "2026-01-02.csv")
+        sinks.FolderSink(sink.path, "personal").write_rows([valid_row(account="personal")])
+        self.git("add", "personal", cwd=sink.path)
+        sink.write_rows([valid_row()])
+        sink.sync(TODAY)
+        listed = self.git("--git-dir", self.remote, "ls-tree", "-r", "--name-only", "main")
+        self.assertNotIn("personal", listed)
+        staged = self.git("diff", "--cached", "--name-only", cwd=sink.path)
+        self.assertEqual(staged.strip(), os.path.relpath(other, sink.path))
+
+    def assert_nothing_left(self, sink):
+        branches = self.git("--git-dir", self.remote, "branch", "--list")
+        self.assertEqual(branches.strip(), "")
+        local = subprocess.run(("git", "rev-parse", "--verify", "-q", "HEAD"), cwd=sink.path,
+                               env=self.env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.assertNotEqual(local.returncode, 0)
+
+    def test_an_untracked_stray_file_stops_the_commit_and_push(self):
+        sink = self.clone("a", "work")
+        sink.write_rows([valid_row()])
+        os.makedirs(os.path.join(sink.path, "drafts"))
+        with open(os.path.join(sink.path, "drafts", "notes.txt"), "w") as handle:
+            handle.write(CANARY + "\n")
+        with self.assertRaises(audit.AuditError) as caught:
+            sink.sync(TODAY)
+        self.assertEqual(caught.exception.problems,
+                         ["drafts/notes.txt: not part of the store layout"])
+        self.assert_nothing_left(sink)
+
+    def test_a_file_staged_by_hand_stops_the_commit_and_push(self):
+        sink = self.clone("a", "work")
         with open(os.path.join(sink.path, "notes.txt"), "w") as handle:
             handle.write("staged by hand\n")
         self.git("add", "notes.txt", cwd=sink.path)
         sink.write_rows([valid_row()])
+        with self.assertRaises(audit.AuditError):
+            sink.sync(TODAY)
+        self.assert_nothing_left(sink)
+
+    def test_a_tampered_committed_file_is_audited_in_full_before_the_push(self):
+        sink = self.clone("a", "work")
+        sink.write_rows([valid_row(ts="2026-01-02T01:00:00Z")])
         sink.sync(TODAY)
-        listed = self.git("--git-dir", self.remote, "ls-tree", "-r", "--name-only", "main")
-        self.assertNotIn("notes.txt", listed)
-        staged = self.git("diff", "--cached", "--name-only", cwd=sink.path)
-        self.assertEqual(staged.strip(), "notes.txt")
+        path = os.path.join(sink.path, "work/2026/01/2026-01-02.csv")
+        with open(path) as handle:
+            text = handle.read()
+        with open(path, "w") as handle:
+            handle.write(text.replace("claude-opus-5-5", CANARY + " private", 1))
+        sink.write_rows([valid_row(ts="2026-01-02T02:00:00Z")])
+        with self.assertRaises(audit.AuditError) as caught:
+            sink.sync(TODAY)
+        problems = "\n".join(caught.exception.problems)
+        self.assertEqual(problems, "work/2026/01/2026-01-02.csv: row 0: column model is invalid")
+        self.assertNotIn(CANARY, problems + str(caught.exception))
+        count = self.git("--git-dir", self.remote, "rev-list", "--count", "main")
+        self.assertEqual(count.strip(), "1")
+        local = self.git("rev-list", "--count", "HEAD", cwd=sink.path)
+        self.assertEqual(local.strip(), "1")
+
+    def test_slug_names_stop_the_push_when_names_are_hashed(self):
+        path = self.tmp.join("a")
+        self.git("clone", "-q", self.remote, path)
+        sinks.FolderSink(path, "work").write_streams({"skills": [skill_row()]})
+        sink = sinks.GitSink(path, "work", "origin", "main", True,
+                             env=self.env, hashed_names=True)
+        with self.assertRaises(audit.AuditError) as caught:
+            sink.sync(TODAY)
+        self.assertEqual(caught.exception.problems, [
+            "work/2026/01/2026-01-02.skills.csv: skills row 0: column skill is invalid"])
+        self.assert_nothing_left(sink)
+
+    def commit_by_hand(self, sink, relative, text=None, link=None):
+        path = os.path.join(sink.path, relative)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        if link:
+            os.symlink(link, path)
+        else:
+            with open(path, "w") as handle:
+                handle.write(text)
+        self.git("add", "--", relative, cwd=sink.path)
+        self.git("-c", "user.name=t", "-c", "user.email=t@example.com",
+                 "commit", "-q", "-m", "by hand", cwd=sink.path)
+
+    def remote_count(self):
+        return self.git("--git-dir", self.remote, "rev-list", "--count", "main").strip()
+
+    def test_a_local_commit_made_by_hand_stops_the_first_push(self):
+        sink = self.clone("a", "work")
+        sink.write_rows([valid_row()])
+        self.commit_by_hand(sink, "notes.txt", CANARY + "\n")
+        with self.assertRaises(audit.AuditError) as caught:
+            sink.sync(TODAY)
+        self.assertEqual(caught.exception.problems, ["notes.txt: not part of the store layout"])
+        self.assertEqual(self.git("--git-dir", self.remote, "branch", "--list").strip(), "")
+
+    def test_a_local_commit_made_by_hand_stops_a_later_push(self):
+        sink = self.clone("a", "work")
+        sink.write_rows([valid_row(ts="2026-01-02T01:00:00Z")])
+        sink.sync(TODAY)
+        self.commit_by_hand(sink, "drafts/notes.txt", CANARY + "\n")
+        sink.write_rows([valid_row(ts="2026-01-02T02:00:00Z")])
+        with self.assertRaises(audit.AuditError) as caught:
+            sink.sync(TODAY)
+        self.assertEqual(caught.exception.problems,
+                         ["drafts/notes.txt: not part of the store layout"])
+        self.assertEqual(self.remote_count(), "1")
+
+    def test_a_committed_link_stops_the_push(self):
+        sink = self.clone("a", "work")
+        sink.write_rows([valid_row()])
+        self.commit_by_hand(sink, "work/2026/01/2026-01-03.csv", link="/etc/hosts")
+        with self.assertRaises(audit.AuditError) as caught:
+            sink.sync(TODAY)
+        self.assertEqual(caught.exception.problems,
+                         ["work/2026/01/2026-01-03.csv: is a link, not a file"])
+
+    def test_the_push_audit_reads_what_git_commits_not_the_working_tree(self):
+        sink = self.clone("a", "work")
+        with open(os.path.join(sink.path, ".git", "info", "attributes"), "w") as handle:
+            handle.write("*.csv filter=leak\n")
+        self.git("config", "filter.leak.clean",
+                 "sed -e 's/claude-opus-5-5/%s private/'" % CANARY, cwd=sink.path)
+        sink.write_rows([valid_row()])
+        with self.assertRaises(audit.AuditError) as caught:
+            sink.sync(TODAY)
+        problems = "\n".join(caught.exception.problems)
+        self.assertEqual(problems, "work/2026/01/2026-01-02.csv: row 0: column model is invalid")
+        self.assertNotIn(CANARY, problems + str(caught.exception))
+        self.assertEqual(self.git("--git-dir", self.remote, "branch", "--list").strip(), "")
+
+    def test_a_modified_gitattributes_stops_the_push(self):
+        sink = self.clone("a", "work")
+        sink.write_rows([valid_row()])
+        with open(os.path.join(sink.path, ".gitattributes"), "w") as handle:
+            handle.write("*.csv merge=union\n*.txt -diff\n")
+        with self.assertRaises(audit.AuditError) as caught:
+            sink.sync(TODAY)
+        self.assertEqual(caught.exception.problems,
+                         [".gitattributes: content is not what the tool writes"])
+        self.assert_nothing_left(sink)
 
     def test_destination_that_is_not_a_repo_raises(self):
         sink = sinks.GitSink(self.tmp.join("plain"), "work", "origin", "main", True, env=self.env)
@@ -242,6 +383,15 @@ class MakeSinkTest(unittest.TestCase):
             "branch": "trunk", "push": False}})
         self.assertIsInstance(git, sinks.GitSink)
         self.assertEqual((git.remote, git.branch, git.push), ("up", "trunk", False))
+
+    def test_sinks_hash_names_unless_the_config_turns_it_off(self):
+        for destination in ({"type": "folder", "path": "/data"},
+                            {"type": "git", "path": "/data"}):
+            base = {"account": "work", "destination": destination}
+            with self.subTest(destination=destination["type"]):
+                self.assertIs(sinks.make_sink(base).hashed_names, True)
+                off = dict(base, hash_names=False)
+                self.assertIs(sinks.make_sink(off).hashed_names, False)
 
 
 if __name__ == "__main__":

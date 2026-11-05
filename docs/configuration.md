@@ -12,8 +12,8 @@ The config is found in this order:
 2. the `CLAUDE_USAGE_CONFIG` environment variable
 3. `~/.config/claude-usage-collector/config.json`
 
-The salt (`salt`) and the state file (`state.json`) live in the same folder
-as the config. A second config in another folder therefore has its own salt
+The salt (`salt`), the state file (`state.json`) and the local name map
+(`names.json`) live in the same folder as the config. A second config in another folder therefore has its own salt
 and its own read positions.
 
 ## Creating it
@@ -40,7 +40,7 @@ This is what `init --account work` writes (shown compactly):
   "machine_label": null,
   "sources": ["~/.claude/projects"],
   "round_ts_to_hour": false,
-  "hash_names": false,
+  "hash_names": true,
   "crosscheck": {"command": "ccusage", "enabled": true, "period": "week"},
   "account": "work",
   "destination": {"type": "folder", "path": "~/usage-data"},
@@ -73,14 +73,34 @@ A git store looks like this:
 | `destination.branch` | `"main"` | Git only: branch to pull from and push to. |
 | `destination.push` | `true` | Git only: set `false` to commit locally without pushing. |
 | `round_ts_to_hour` | `false` | Round every timestamp down to the hour, to hide exact working times. |
-| `hash_names` | `false` | Hash every name that would otherwise be written as is: agent types, skill names, catalog names and tool names (MCP tools are always hashed). Turn it on if you define agents or skills named after projects or clients. See [privacy.md](privacy.md#threat-model). |
-| `hash_agent_types` | `false` | The older name of `hash_names`, kept so existing configs keep working. Either key set to `true` hashes every name. Older versions hashed only agent types with it, so an existing config with it on starts hashing tool, skill and catalog names too, and per-tool figures split at the upgrade date. `init` no longer writes it. |
+| `hash_names` | `true` | Hash every name that would otherwise be written as is: agent types, skill names, catalog names and tool names (MCP tools and names that are not slugs are always hashed). The plain names stay readable on your machine through the local name map (see [privacy.md](privacy.md#the-local-name-map)). Set it to `false` only if every agent and skill name you use is safe to share; `doctor` warns while it is off. See [privacy.md](privacy.md#threat-model). |
+| `hash_agent_types` | not set | The older name of `hash_names`, kept so existing configs keep working. Only `true` counts: it turns hashing on whatever `hash_names` says. `false` is ignored, because older versions wrote it as a default. `init` no longer writes it. |
 | `schedule` | `"18:00"` | Daily run time in 24 hour `HH:MM`. Used by `install/install.sh`. |
-| `crosscheck.command` | `"ccusage"` | Command to run for the cross-check. Can be a full path. It is pointed at this config's `sources`, which must each end in `projects`. |
+| `crosscheck.command` | `"ccusage"` | Command to run for the cross-check: a bare name found through `PATH`, or a path, which may start with `~/`. The launchd agent runs with the `PATH` of the shell that ran `install/install.sh`. If ccusage is not on it, or a version manager moves it after a Node upgrade, use the absolute path, for example `~/.nvm/versions/node/<version>/bin/ccusage`, or run the installer again. See [cross-check.md](cross-check.md#when-ccusage-comes-from-nvm-or-another-version-manager). It is pointed at this config's `sources`, which must each end in `projects`. |
 | `crosscheck.enabled` | `true` | Set `false` to skip the cross-check. |
 | `crosscheck.period` | `"week"` | `week` checks each completed ISO week, `month` checks each completed calendar month. Configs without this key behave as `week`. See [cross-check.md](cross-check.md#when-it-runs). |
 | `weights` | see below | Multipliers for the weighted usage figure in `analyze` and `report`. |
 | `prices` | `{}` | Dollar prices per million tokens, keyed by model prefix. Empty by default. |
+
+### Which key decides whether names are hashed
+
+**Every name is hashed unless `hash_names` is `false` and
+`hash_agent_types` is not `true`.** A `true` on either key always hashes,
+so no older config that asked for hashing loses it. An older
+`"hash_agent_types": false` is ignored, because older versions wrote it
+into every config as a default, not as a choice.
+
+| Config has | Names are hashed |
+|---|---|
+| `"hash_agent_types": true` | yes, whatever `hash_names` says |
+| `"hash_names": true` | yes |
+| `"hash_names": false`, and `hash_agent_types` missing or `false` | no, and `doctor` warns |
+| neither key, or only `"hash_agent_types": false` | yes |
+
+**Upgrading:** a config written by an older `init` may hold
+`"hash_names": false`. That was the old default, but the tool cannot tell
+it from a choice, so it stays off and `claude-usage doctor` warns. Set it
+to `true` (or delete the key) to hash every name from the next `collect`.
 
 `weights` and `prices` are not written by `init`. Add them by hand when you
 want them. Both are explained in [analysis.md](analysis.md).
@@ -99,6 +119,12 @@ want them. Both are explained in [analysis.md](analysis.md).
   their old form.
 - **Account label:** applies to new rows only, and they go into a new
   account folder.
+- **Node upgrade:** if `crosscheck.command` points into a version manager
+  such as `~/.nvm/versions/node/<version>/bin/ccusage`, the path changes
+  when Node does. So does the `PATH` the installer gave the launchd
+  agent. Update the command or run `install/install.sh` again, then run
+  `claude-usage doctor`: it checks the command against the agent's
+  `PATH`.
 
 `claude-usage doctor` loads and validates the config, including
 `crosscheck`, `weights` and `prices`, so run it after any hand edit.

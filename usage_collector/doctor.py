@@ -1,12 +1,14 @@
 """Read-only health checks for a local install."""
 import json
 import os
+import plistlib
 import shutil
 import stat
 import subprocess
 import sys
 
 from . import config as config_module
+from . import crosscheck as crosscheck_module
 from . import periods
 from .hashing import SaltError, load_salt
 
@@ -15,6 +17,8 @@ CLAUDE_CODE_CLEANUP_DAYS = 30
 # A monthly check run early in a month reads the whole previous month.
 MONTH_CLEANUP_DAYS = 62
 SETTINGS = "~/.claude/settings.json"
+PLIST = "~/Library/LaunchAgents/%s.plist" % LAUNCHD_LABEL
+LAUNCHD_DEFAULT_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
 UNSET = object()
 
 
@@ -41,6 +45,7 @@ class Doctor:
         self._check_salt()
         self._check_sources(config["sources"])
         self._check_destination(config["destination"])
+        self._check_hashing(config["hash_names"])
         self._check_launchd()
         self._check_ccusage(config["crosscheck"])
         self._check_retention(config["crosscheck"].get("period", "week"))
@@ -103,6 +108,13 @@ class Doctor:
         else:
             self._add("FAIL", "git", "remote not reachable")
 
+    def _check_hashing(self, hash_names: bool) -> None:
+        if hash_names:
+            self._add("OK", "hash_names", "every name is hashed")
+        else:
+            self._add("WARN", "hash_names", "off, so slug names leave as they are, "
+                      "set hash_names to true in the config to hash every name")
+
     def _check_launchd(self) -> None:
         if sys.platform != "darwin" or not self._which("launchctl"):
             self._add("WARN", "launchd", "not available, schedule runs another way")
@@ -116,10 +128,22 @@ class Doctor:
     def _check_ccusage(self, crosscheck: dict) -> None:
         if not crosscheck.get("enabled", True):
             self._add("OK", "ccusage", "cross-check disabled")
-        elif self._which(crosscheck.get("command", "ccusage")):
-            self._add("OK", "ccusage", "found on PATH")
+            return
+        command = crosscheck.get("command", "ccusage")
+        agent_path = _agent_path(self._expand(PLIST))
+        if agent_path is None:
+            self._check_command_here(command)
+        elif crosscheck_module.resolve_command(command, dict(self.environ, PATH=agent_path)):
+            self._add("OK", "ccusage", "found on the PATH launchd runs with")
         else:
-            self._add("WARN", "ccusage", "not on PATH, the cross-check will be skipped")
+            self._add("WARN", "ccusage", "launchd cannot find ccusage, re-run "
+                      "install/install.sh or set an absolute path in crosscheck.command")
+
+    def _check_command_here(self, command: str) -> None:
+        if crosscheck_module.resolve_command(command, self.environ):
+            self._add("OK", "ccusage", "found")
+        else:
+            self._add("WARN", "ccusage", "not found, the cross-check will be skipped")
 
     def _check_retention(self, period: str) -> None:
         days = _cleanup_period_days(self._expand(SETTINGS))
@@ -152,6 +176,18 @@ class Doctor:
             )
         except (OSError, subprocess.TimeoutExpired):
             return None
+
+
+def _agent_path(path: str):
+    """The PATH the installed launchd agent runs with, or None when none is installed."""
+    try:
+        with open(path, "rb") as handle:
+            agent = plistlib.load(handle)
+    except (OSError, ValueError, plistlib.InvalidFileException):
+        return None
+    environment = agent.get("EnvironmentVariables") if isinstance(agent, dict) else None
+    path_value = environment.get("PATH") if isinstance(environment, dict) else None
+    return path_value if isinstance(path_value, str) else LAUNCHD_DEFAULT_PATH
 
 
 def _cleanup_period_days(path: str):

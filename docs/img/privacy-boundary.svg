@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="492" viewBox="0 0 960 492" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="523" viewBox="0 0 960 523" role="img" aria-labelledby="title desc">
   <title id="title">Privacy boundary</title>
-  <desc id="desc">Transcript content, attached instruction, skill and hook text, names, paths and the salt stay on the machine. Only timestamps, counts, character lengths, slugs and salted hashes pass the guard.</desc>
+  <desc id="desc">Transcript content, attached instruction, skill and hook text, names, paths, the salt and the local name map stay on the machine. Only timestamps, counts, character lengths, short labels and salted hashes pass the guard and the audit, and tool, skill and agent names are hashed by default.</desc>
   <style>
     .bg { fill: #f6f8fa; }
     .card { fill: #ffffff; stroke: #d0d7de; stroke-width: 1; }
@@ -58,13 +58,13 @@
     <marker id="m-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-purple" d="M0,0 L10,5 L0,10 z"/></marker>
     <marker id="m-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-red" d="M0,0 L10,5 L0,10 z"/></marker>
   </defs>
-  <rect class="bg" x="0" y="0" width="960" height="492" rx="16"/>
+  <rect class="bg" x="0" y="0" width="960" height="523" rx="16"/>
   <text x="24" y="40" class="h">What stays, what leaves</text>
-  <text x="220" y="40" class="s">the guard is the only door out, and it fails closed</text>
-  <rect class="orange" x="24" y="64" width="380" height="404" rx="12"/>
+  <text x="220" y="40" class="s">the guard and the audit both fail closed</text>
+  <rect class="orange" x="24" y="64" width="380" height="435" rx="12"/>
   <text x="44" y="94" class="h">Stays on this machine</text>
-  <rect class="green" x="556" y="64" width="380" height="404" rx="12"/>
-  <text x="576" y="94" class="h">Leaves, after the guard</text>
+  <rect class="green" x="556" y="64" width="380" height="435" rx="12"/>
+  <text x="576" y="94" class="h">Leaves, after the guard and the audit</text>
   <circle class="dot-orange" cx="48" cy="124" r="3.5"/>
   <text x="62" y="128">Prompts and replies</text>
   <circle class="dot-orange" cx="48" cy="155" r="3.5"/>
@@ -87,6 +87,8 @@
   <text x="62" y="407">The salt (config folder, mode 600)</text>
   <circle class="dot-orange" cx="48" cy="434" r="3.5"/>
   <text x="62" y="438">Offsets, seen ids, marks (state file)</text>
+  <circle class="dot-orange" cx="48" cy="465" r="3.5"/>
+  <text x="62" y="469">Name map, names.json (config folder, mode 600)</text>
   <circle class="dot-green" cx="580" cy="124" r="3.5"/>
   <text x="594" y="128">Timestamps, UTC (optional: hour only)</text>
   <circle class="dot-green" cx="580" cy="155" r="3.5"/>
@@ -96,11 +98,11 @@
   <circle class="dot-green" cx="580" cy="217" r="3.5"/>
   <text x="594" y="221">Model slug and effort level</text>
   <circle class="dot-green" cx="580" cy="248" r="3.5"/>
-  <text x="594" y="252">Tool names (MCP tools hashed)</text>
+  <text x="594" y="252">Tool names (hashed by default)</text>
   <circle class="dot-green" cx="580" cy="279" r="3.5"/>
   <text x="594" y="283">Agent type, spawn depth, fork flag</text>
   <circle class="dot-green" cx="580" cy="310" r="3.5"/>
-  <text x="594" y="314">Skill and agent names (slug or hash)</text>
+  <text x="594" y="314">Skill and agent names (hashed by default)</text>
   <circle class="dot-green" cx="580" cy="341" r="3.5"/>
   <text x="594" y="345">Salted hashes of project and session</text>
   <circle class="dot-green" cx="580" cy="372" r="3.5"/>
@@ -114,6 +116,7 @@
   <text x="480" y="268" class="s" text-anchor="middle">one schema</text>
   <text x="480" y="288" class="s" text-anchor="middle">per file</text>
   <text x="480" y="308" class="s" text-anchor="middle">fail closed</text>
+  <text x="480" y="336" class="s" text-anchor="middle">audit at push</text>
   <path class="line" d="M404,266 L422,266" marker-end="url(#m-grey)"/>
   <path class="line-blue" d="M536,266 L554,266" marker-end="url(#m-blue)"/>
 </svg>

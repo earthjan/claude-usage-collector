@@ -90,12 +90,35 @@ def claude_config_dirs(sources) -> str:
     return ",".join(dirs)
 
 
+def resolve_command(command: str, environ) -> str:
+    """The command's path, from a full path, a ~ path or PATH, or None."""
+    if command == "~" or command.startswith("~/"):
+        home = environ.get("HOME") or os.path.expanduser("~")
+        command = home + command[1:]
+    elif command.startswith("~"):
+        command = os.path.expanduser(command)
+    return shutil.which(command, path=environ.get("PATH"))
+
+
+def command_search_path(resolved: str, path) -> str:
+    """PATH led by the folders of the command and its symlink target.
+
+    A version manager installs an interpreter beside the command, and a
+    shebang such as `#!/usr/bin/env node` only finds it through PATH.
+    """
+    folders = [os.path.dirname(os.path.realpath(resolved)),
+               os.path.dirname(os.path.abspath(resolved))]
+    folders += path.split(os.pathsep) if path else []
+    return os.pathsep.join(dict.fromkeys(folders))
+
+
 def run_ccusage(command: str, period: str, environ, sources) -> dict:
     base = os.environ if environ is None else environ
     env = dict(base, CLAUDE_CONFIG_DIR=claude_config_dirs(sources))
-    path = shutil.which(command, path=env.get("PATH"))
+    path = resolve_command(command, env)
     if not path:
-        raise CrosscheckError("ccusage command not found on PATH")
+        raise CrosscheckError("ccusage command not found")
+    env["PATH"] = command_search_path(path, env.get("PATH"))
     since, until = ccusage_bounds(period)
     argv = [path, "daily", "--json", "--since", since, "--until", until,
             "--timezone", "UTC"]

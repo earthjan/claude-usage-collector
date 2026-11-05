@@ -250,5 +250,42 @@ class ValidateCheckTotalsTest(unittest.TestCase):
                 self.assertTrue(guard.validate_check_totals(totals))
 
 
+class HashedNamesTest(unittest.TestCase):
+    HASH = "0123456789ab"
+
+    def problems(self, stream, row):
+        return guard.validate_stream(stream, [row], hashed_names=True)
+
+    def test_hashed_names_pass(self):
+        cases = (
+            ("usage", valid_row(agent_type=self.HASH, tools=self.HASH + ";mcp:" + self.HASH)),
+            ("usage", valid_row(tools="")),
+            ("context", context_row(agent_type=self.HASH)),
+            ("skills", skill_row(skill=self.HASH)),
+            ("catalog", catalog_row(name=self.HASH)),
+        )
+        for stream, row in cases:
+            with self.subTest(stream=stream):
+                self.assertEqual(self.problems(stream, row), [])
+
+    def test_slug_names_fail_without_echoing_them(self):
+        cases = (
+            ("usage", valid_row(tools=self.HASH), "agent_type", "Explore"),
+            ("usage", valid_row(), "tools", "Bash;Read"),
+            ("usage", valid_row(), "tools", "mcp:Explore"),
+            ("context", context_row(), "agent_type", "Explore"),
+            ("skills", skill_row(), "skill", "client-review"),
+            ("catalog", catalog_row(), "name", "client-review"),
+        )
+        for stream, row, column, value in cases:
+            with self.subTest(stream=stream, column=column):
+                problems = self.problems(stream, dict(row, **{column: value}))
+                self.assertEqual(problems, ["%s 0: column %s is invalid"
+                                            % (guard.SCHEMAS[stream].label, column)])
+
+    def test_slug_names_still_pass_when_hashing_is_off(self):
+        self.assertEqual(guard.validate_stream("skills", [skill_row()]), [])
+
+
 if __name__ == "__main__":
     unittest.main()

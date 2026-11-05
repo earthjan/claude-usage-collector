@@ -10,6 +10,7 @@ from html import escape
 
 from . import formatting as fmt
 from .analyze import AnalysisError, build
+from .name_map import NameMapError
 from .store import StoreError
 
 SVG_NS = "http://www.w3.org/2000/svg"
@@ -721,7 +722,7 @@ def _write(path: str, text: str) -> None:
 def cmd_report(args, config) -> int:
     try:
         summary, skipped = build(args, config)
-    except (StoreError, AnalysisError) as error:
+    except (StoreError, AnalysisError, NameMapError) as error:
         print("error: %s" % error, file=sys.stderr)
         return 1
     _write(args.out, render_html(summary, skipped))

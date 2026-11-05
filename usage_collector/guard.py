@@ -32,6 +32,7 @@ EFFORTS = ("low", "medium", "high", "xhigh", "max")
 ROW_INT_LIMIT = 10 ** 9
 TOTAL_INT_LIMIT = 10 ** 13
 CHECK_KEYS = ("input", "output", "cache_read", "cache_write")
+MCP_MARK = "mcp:"
 
 SLUG = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,63}")
 HASH = re.compile(r"[0-9a-f]{12}")
@@ -120,6 +121,22 @@ VALIDATORS = {
 VALIDATORS.update((part, is_count) for part in CONTEXT_PARTS)
 
 
+def _hashed_tool(value) -> bool:
+    return is_hash(value[len(MCP_MARK):] if value.startswith(MCP_MARK) else value)
+
+
+def _hashed_tools(value) -> bool:
+    if value == "":
+        return True
+    return isinstance(value, str) and all(map(_hashed_tool, value.split(";")))
+
+
+HASHED_VALIDATORS = dict(
+    VALIDATORS, agent_type=_optional(is_hash), skill=is_hash, name=is_hash,
+    tools=_hashed_tools,
+)
+
+
 def _usage_mismatches(row: dict) -> list:
     parts = int(row["input"]) + int(row["cache_read"]) + int(row["cache_write"])
     mismatches = [] if int(row["context"]) == parts else ["context"]
@@ -152,23 +169,25 @@ def validate_rows(rows) -> list:
     return validate_stream("usage", rows)
 
 
-def validate_streams(batches: dict) -> list:
+def validate_streams(batches: dict, hashed_names=False) -> list:
     problems = []
     for stream, rows in batches.items():
-        problems.extend(validate_stream(stream, rows))
+        problems.extend(validate_stream(stream, rows, hashed_names))
     return problems
 
 
-def validate_stream(stream: str, rows) -> list:
+def validate_stream(stream: str, rows, hashed_names=False) -> list:
+    """Problems in rows; with hashed_names, every name column must be a hash."""
     schema = SCHEMAS[stream]
+    validators = HASHED_VALIDATORS if hashed_names else VALIDATORS
     problems = []
     for index, row in enumerate(rows):
         where = "%s %d" % (schema.label, index)
-        problems.extend(_row_problems(schema, where, row))
+        problems.extend(_row_problems(schema, where, row, validators))
     return problems
 
 
-def _row_problems(schema: Schema, where: str, row) -> list:
+def _row_problems(schema: Schema, where: str, row, validators) -> list:
     if not isinstance(row, dict):
         return ["%s: not a row" % where]
     problems = []
@@ -177,7 +196,7 @@ def _row_problems(schema: Schema, where: str, row) -> list:
     for column in schema.columns:
         if column not in row:
             problems.append("%s: column %s is missing" % (where, column))
-        elif not VALIDATORS[column](row[column]):
+        elif not validators[column](row[column]):
             problems.append("%s: column %s is invalid" % (where, column))
     if not problems:
         problems.extend("%s: column %s is invalid" % (where, column)

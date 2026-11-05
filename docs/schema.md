@@ -20,7 +20,7 @@ File: `<account>/YYYY/MM/YYYY-MM-DD.csv`.
 | `session` | hash | Salted hash of the session id. |
 | `agent` | hash or empty | Salted hash of the subagent id. Empty on the main thread. |
 | `is_subagent` | 0 or 1 | 1 when the row came from a file under `subagents/`. |
-| `agent_type` | slug, hash or empty | `agentType` from the subagent's meta file, such as `Explore`. Hashed when `hash_names` (or the older `hash_agent_types`) is on, or when it is not a simple slug. Empty on the main thread. |
+| `agent_type` | slug, hash or empty | `agentType` from the subagent's meta file, such as `Explore`. Hashed when `hash_names` is on (the default), or when it is not a simple slug. Empty on the main thread. |
 | `spawn_depth` | integer or empty | `spawnDepth` from the meta file: how deep in a chain of agents this one was started. Empty on the main thread. |
 | `is_fork` | 0 or 1 | 1 when the meta file says `isFork: true`. |
 | `model` | slug or hash | The model name, such as `claude-opus-5-5`. Ids from other providers are cut to the part from `claude-` on, so `us.anthropic.claude-opus-4-1-v1:0` becomes `claude-opus-4-1-v1:0` and `claude-opus-4-1@20250805` becomes `claude-opus-4-1`. Any other id is hashed. A missing id is `unknown`. |
@@ -32,7 +32,7 @@ File: `<account>/YYYY/MM/YYYY-MM-DD.csv`.
 | `context` | integer | `input + cache_read + cache_write`: the size of the context this message saw. |
 | `web_search` | integer | Server-side web search requests. |
 | `web_fetch` | integer | Server-side web fetch requests. |
-| `tools` | list or empty | Tool names called in this message, sorted, unique, joined with `;`. MCP tools appear as `mcp:<hash>`. With `hash_names` on, every other tool name is hashed too. |
+| `tools` | list or empty | Tool names called in this message, sorted, unique, joined with `;`. MCP tools appear as `mcp:<hash>`. With `hash_names` on (the default), every other tool name is hashed too. |
 | `compacted` | 0 or 1 | 1 on the first row after a context compaction in that file. |
 
 Missing token fields count as 0.
@@ -49,7 +49,10 @@ The guard enforces these for every file. Anything else stops the run.
 - **date:** `YYYY-MM-DD`, a real calendar day.
 
 A hash also matches the slug rule, so a name column marked "slug or hash"
-always passes as a slug.
+always passes as a slug. While `hash_names` is on, the guard and the audit
+are stricter: `agent_type`, `skill` and `name` must be a hash (or empty
+where the column allows it), and every item in `tools` must be a hash or
+`mcp:` plus a hash.
 
 ### Example row
 
@@ -130,7 +133,7 @@ uses of the same skill by the same agent in the same session add no row.
 |---|---|---|
 | `ts` | timestamp | When the `invoked_skills` attachment was written. Rounded with `round_ts_to_hour`. |
 | `account`, `machine`, `project`, `session`, `agent` | as in usage rows | Where the skill was used. |
-| `skill` | slug or hash | The skill name. Hashed when it is not a simple slug, or when `hash_names` is on. |
+| `skill` | slug or hash | The skill name. Hashed when `hash_names` is on (the default), or when it is not a simple slug. |
 
 ```csv
 ts,account,machine,project,session,agent,skill
@@ -219,6 +222,6 @@ can pass 10^9.
 
 **The same project gets a different hash on each machine unless the
 machines share a salt.** Each `init` creates its own salt. If you want
-project and session hashes to line up across machines, copy the salt file
-before running `init` on the next machine. See
-[multi-account.md](multi-account.md).
+project, session and name hashes to line up across machines, copy the salt
+file before running `init` on the next machine. See
+[multi-account.md](multi-account.md#matching-hashes-across-machines).

@@ -5,6 +5,7 @@ from collections import Counter
 from . import context_analysis
 from . import formatting as fmt
 from .config import DEFAULTS, TOKEN_KEYS, is_token_number_map
+from .name_map import NameMap, NameMapError
 from .store import RowReader, StoreError, StreamReader, resolve_store
 
 CONTEXT_BANDS = (
@@ -236,17 +237,23 @@ def build(args, config):
     """Loads and summarizes a store; returns (summary, skipped row count)."""
     store = resolve_store(args.store, config)
     account = getattr(args, "account", None)
+    names = _name_map(getattr(args, "names", None))
     reader = RowReader(store, since=args.since, account=account)
-    rows = reader.read()
+    rows = names.resolve("usage", reader.read())
     streams, skipped = load_streams(store, since=args.since, account=account)
+    streams = {stream: names.resolve(stream, found) for stream, found in streams.items()}
     summary = summarize(rows, Meter.from_config(config), streams)
     return summary, reader.skipped + skipped
+
+
+def _name_map(path) -> NameMap:
+    return NameMap.read(path) if path else NameMap()
 
 
 def cmd_analyze(args, config) -> int:
     try:
         summary, skipped = build(args, config)
-    except (StoreError, AnalysisError) as error:
+    except (StoreError, AnalysisError, NameMapError) as error:
         print("error: %s" % error, file=sys.stderr)
         return 1
     print(render_text(summary, skipped), end="")

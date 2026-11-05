@@ -3,6 +3,7 @@ import csv
 import io
 import json
 import os
+import plistlib
 import shutil
 import stat
 import subprocess
@@ -21,6 +22,7 @@ from tests.test_sinks import isolated_git_env
 
 NOW = datetime(2026, 3, 10, 18, 0, tzinfo=timezone.utc)
 FIRST_OF_MONTH = datetime(2026, 3, 1, 18, 0, tzinfo=timezone.utc)
+CANARY = "CANARY_AUDIT_CLI_7f3"
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
@@ -286,6 +288,206 @@ class CollectTest(CliTestCase):
         self.assertIn("init", err)
 
 
+PLAIN_NAMES = ("Explore", "plugin-name:agent-name", "tdd", "Bash", "NotebookEdit",
+               "mcp__private_server__lookup", "private_server")
+
+
+class NameMapTest(CliTestCase):
+    def name_map_path(self):
+        return os.path.join(os.path.dirname(self.config_path), "names.json")
+
+    def read_name_map(self):
+        with open(self.name_map_path()) as handle:
+            return json.load(handle)["names"]
+
+    def policy(self):
+        return NamePolicy(load_salt(config_module.salt_path(self.config_path)), True)
+
+    def test_default_config_hashes_every_name_and_no_plain_name_reaches_the_store(self):
+        self.init()
+        self.assertEqual(self.cli("collect")[0], 0)
+        data = support.read_all_bytes(self.store)
+        for name in PLAIN_NAMES:
+            with self.subTest(name=name):
+                self.assertNotIn(name.encode(), data)
+        self.assertIn(self.policy().name("Explore").encode(), data)
+
+    def config_without(self, *keys, **changes):
+        self.init()
+        with open(self.config_path) as handle:
+            data = json.load(handle)
+        for key in keys:
+            data.pop(key)
+        data.update(changes)
+        with open(self.config_path, "w") as handle:
+            json.dump(data, handle)
+
+    def assert_names_hashed(self):
+        self.assertEqual(self.cli("collect")[0], 0)
+        data = support.read_all_bytes(self.store)
+        self.assertNotIn(b"Explore", data)
+        self.assertIn(self.policy().name("Explore").encode(), data)
+
+    def test_v1_config_with_only_hash_agent_types_false_hashes_every_name(self):
+        self.config_without("hash_names", hash_agent_types=False)
+        self.assert_names_hashed()
+
+    def test_old_init_hash_names_false_with_hash_agent_types_true_still_hashes(self):
+        self.config_without(hash_names=False, hash_agent_types=True)
+        self.assert_names_hashed()
+
+    def test_explicit_hash_names_false_writes_slug_names(self):
+        self.config_without(hash_names=False)
+        self.assertEqual(self.cli("collect")[0], 0)
+        self.assertIn(b"Explore", support.read_all_bytes(self.store))
+        self.assertNotIn("Explore", self.read_name_map().values())
+
+    def test_collect_writes_a_private_local_map_of_hashed_names(self):
+        self.init()
+        self.assertEqual(self.cli("collect")[0], 0)
+        mode = stat.S_IMODE(os.stat(self.name_map_path()).st_mode)
+        self.assertEqual(mode, 0o600)
+        names = self.read_name_map()
+        policy = self.policy()
+        self.assertEqual(names[policy.name("Explore")], "Explore")
+        self.assertEqual(names[policy.name("tdd")], "tdd")
+        self.assertEqual(names[policy.name("Bash")], "Bash")
+        mcp = policy.tool("mcp__private_server__lookup")[len("mcp:"):]
+        self.assertEqual(names[mcp], "mcp__private_server__lookup")
+        self.assertFalse([path for path in self.store_files()
+                          if path.endswith("names.json")])
+
+    def test_map_is_merged_across_runs(self):
+        self.init()
+        with open(self.name_map_path(), "w") as handle:
+            json.dump({"names": {"0" * 12: "earlier"}}, handle)
+        self.assertEqual(self.cli("collect")[0], 0)
+        names = self.read_name_map()
+        self.assertEqual(names["0" * 12], "earlier")
+        self.assertEqual(names[self.policy().name("Explore")], "Explore")
+
+    def test_dry_run_writes_no_map(self):
+        self.init()
+        self.assertEqual(self.cli("collect", "--dry-run")[0], 0)
+        self.assertFalse(os.path.exists(self.name_map_path()))
+
+    def test_map_inside_the_destination_is_refused_without_echoing_paths(self):
+        self.config_path = os.path.join(self.store, "cfg", "config.json")
+        self.init()
+        code, out, err = self.cli("collect")
+        self.assertEqual(code, 1)
+        self.assertIn("name map", err)
+        self.assertNotIn(self.tmp.path, out + err)
+        self.assertFalse(os.path.exists(self.name_map_path()))
+        self.assertEqual([path for path in self.store_files()
+                          if not path.startswith("cfg/")], [])
+
+    def test_analyze_and_report_show_plain_names_from_the_map(self):
+        self.init()
+        self.cli("collect")
+        hashed = self.policy().name("Explore")
+        code, out, err = self.cli("analyze")
+        self.assertEqual(code, 0, err)
+        self.assertIn("Explore", out)
+        self.assertNotIn(hashed, out)
+        out_file = self.tmp.join("out.html")
+        self.assertEqual(self.cli("report", "--out", out_file)[0], 0)
+        with open(out_file) as handle:
+            html = handle.read()
+        self.assertIn("Explore", html)
+        self.assertNotIn(hashed, html)
+
+    def test_a_report_with_plain_names_is_refused_inside_the_store(self):
+        self.init()
+        self.cli("collect")
+        cases = (
+            ("--out", os.path.join(self.store, "report.html")),
+            ("--svg", os.path.join(self.store, "work", "chart.svg")),
+        )
+        for flag, path in cases:
+            with self.subTest(flag=flag):
+                argv = ["report", "--out", self.tmp.join("out.html"), flag, path]
+                for extra in ([], ["--store", self.store]):
+                    code, out, err = self.cli(*(argv + extra))
+                    self.assertEqual(code, 1)
+                    self.assertIn("--no-names", err)
+                    self.assertNotIn(self.tmp.path, out + err)
+                    self.assertFalse(os.path.exists(path))
+                code, _out, err = self.cli(*(argv + ["--no-names"]))
+                self.assertEqual(code, 0, err)
+                self.assertTrue(os.path.exists(path))
+                os.remove(path)
+
+    def test_no_names_shows_hashes(self):
+        self.init()
+        self.cli("collect")
+        hashed = self.policy().name("Explore")
+        out = self.cli("analyze", "--no-names")[1]
+        self.assertIn(hashed, out)
+        self.assertNotIn("Explore", out)
+
+    def test_names_flag_reads_a_map_from_another_path(self):
+        self.init()
+        self.cli("collect")
+        hashed = self.policy().name("Explore")
+        other = self.tmp.join("other-names.json")
+        with open(other, "w") as handle:
+            json.dump({"names": {hashed: "renamed-agent"}}, handle)
+        out = self.cli("analyze", "--names", other)[1]
+        self.assertIn("renamed-agent", out)
+        self.assertNotIn("Explore", out)
+
+    def test_missing_names_file_is_an_error_that_echoes_no_path(self):
+        self.init()
+        self.cli("collect")
+        missing = self.tmp.join("missing.json")
+        code, out, err = self.cli("analyze", "--names", missing)
+        self.assertEqual(code, 1)
+        self.assertIn("name map", err)
+        self.assertNotIn(self.tmp.path, out + err)
+
+    def break_name_map(self):
+        with open(self.name_map_path(), "w") as handle:
+            handle.write('{"names": {"0123456789ab": "' + CANARY)
+
+    def test_a_corrupt_map_does_not_stop_collect(self):
+        self.init()
+        self.break_name_map()
+        code, out, err = self.cli("collect")
+        self.assertEqual(code, 0, err)
+        self.assertIn("11 new rows", out)
+        self.assertIn("name map could not be read", err)
+        self.assertNotIn(self.tmp.path, out + err)
+        self.assertNotIn(CANARY, out + err)
+        self.assertEqual(self.read_name_map()[self.policy().name("Explore")], "Explore")
+        with open(self.name_map_path() + ".bad") as handle:
+            self.assertIn(CANARY, handle.read())
+
+    def test_a_corrupt_default_map_falls_back_to_hashes(self):
+        self.init()
+        self.cli("collect")
+        self.break_name_map()
+        code, out, err = self.cli("analyze")
+        self.assertEqual(code, 0, err)
+        self.assertIn(self.policy().name("Explore"), out)
+        self.assertIn("name map could not be read", err)
+        self.assertNotIn(self.tmp.path, out + err)
+
+    def test_a_corrupt_map_passed_with_names_is_an_error(self):
+        self.init()
+        self.cli("collect")
+        self.break_name_map()
+        code, _out, err = self.cli("analyze", "--names", self.name_map_path())
+        self.assertEqual(code, 1)
+        self.assertIn("name map", err)
+
+    def test_analyze_without_a_map_shows_hashes(self):
+        self.init()
+        self.cli("collect")
+        os.remove(self.name_map_path())
+        self.assertIn(self.policy().name("Explore"), self.cli("analyze")[1])
+
+
 class StatusTest(CliTestCase):
     def test_status_before_and_after_collect(self):
         self.init()
@@ -346,12 +548,29 @@ class SyncAndRunTest(CliTestCase):
         with open(state) as handle:
             self.assertEqual(handle.read(), before)
 
-    def test_run_skips_crosscheck_quietly_without_ccusage(self):
+    def test_run_logs_one_line_when_it_skips_the_crosscheck_without_ccusage(self):
         self.init()
+        missing = self.tmp.join("nowhere", "ccusage")
+        self.edit_config(crosscheck={"command": missing, "enabled": True})
         with mock.patch.object(crosscheck, "cmd_crosscheck") as check:
-            code, _out, _err = self.cli("run", now=FIRST_OF_MONTH)
+            code, out, err = self.cli("run", now=FIRST_OF_MONTH)
         self.assertEqual(code, 0)
         check.assert_not_called()
+        self.assertIn("skipped cross-check: ccusage command not found", out)
+        self.assertNotIn(missing, out + err)
+
+    def test_run_crosschecks_with_a_tilde_command_off_path(self):
+        self.init()
+        tools = os.path.join(self.environ["HOME"], "tools")
+        os.makedirs(tools)
+        script = os.path.join(tools, "ccusage")
+        with open(script, "w") as handle:
+            handle.write("#!/bin/sh\nexit 0\n")
+        os.chmod(script, 0o755)
+        self.edit_config(crosscheck={"command": "~/tools/ccusage", "enabled": True})
+        with mock.patch.object(crosscheck, "cmd_crosscheck", return_value=0) as check:
+            self.assertEqual(self.cli("run", now=NOW)[0], 0)
+        self.assertEqual(check.call_count, 1)
 
     def test_run_crosschecks_previous_month_once(self):
         self.init()
@@ -413,6 +632,67 @@ class SyncAndRunTest(CliTestCase):
         check.assert_not_called()
 
 
+class AuditTest(CliTestCase):
+    def tamper_first_usage_file(self):
+        path = os.path.join(self.store, "work/2026/03/2026-03-01.csv")
+        with open(path) as handle:
+            text = handle.read()
+        with open(path, "w") as handle:
+            handle.write(text.replace("claude-", CANARY + " claude-", 1))
+
+    def test_a_clean_store_passes_and_nothing_changes(self):
+        self.init()
+        self.assertEqual(self.cli("collect")[0], 0)
+        before = support.read_all_bytes(self.store)
+        code, out, err = self.cli("audit")
+        self.assertEqual(code, 0, err)
+        self.assertIn("audit passed: %d file(s) checked" % len(self.store_files()), out)
+        self.assertEqual(support.read_all_bytes(self.store), before)
+
+    def test_a_tampered_store_fails_without_echoing_the_value(self):
+        self.init()
+        self.assertEqual(self.cli("collect")[0], 0)
+        self.tamper_first_usage_file()
+        code, out, err = self.cli("audit", "--store", self.store)
+        self.assertEqual(code, 1)
+        self.assertIn("audit: work/2026/03/2026-03-01.csv: row 0: column model is invalid", err)
+        self.assertNotIn(CANARY, out + err)
+
+    def test_slug_names_fail_the_audit_when_the_config_hashes_names(self):
+        self.init()
+        self.edit_config(hash_names=False)
+        self.assertEqual(self.cli("collect")[0], 0)
+        self.assertEqual(self.cli("audit")[0], 0)
+        self.edit_config(hash_names=True)
+        code, out, err = self.cli("audit")
+        self.assertEqual(code, 1)
+        self.assertIn("column skill is invalid", err)
+        self.assertNotIn("tdd", out + err)
+        os.remove(self.config_path)
+        self.assertEqual(self.cli("audit", "--store", self.store)[0], 0)
+
+    def test_sync_with_a_failed_audit_exits_one_and_pushes_nothing(self):
+        remote = self.tmp.join("remote.git")
+        git = lambda *a: subprocess.run(("git",) + a, env=self.environ, check=True,
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        git("init", "-q", "--bare", "-b", "main", remote)
+        git("clone", "-q", remote, self.store)
+        self.init("--dest-type", "git")
+        self.assertEqual(self.cli("collect")[0], 0)
+        self.tamper_first_usage_file()
+        state = os.path.join(os.path.dirname(self.config_path), "state.json")
+        with open(state) as handle:
+            before = handle.read()
+        code, out, err = self.cli("sync")
+        self.assertEqual(code, 1)
+        self.assertIn("audit: work/2026/03/2026-03-01.csv: row 0: column model is invalid", err)
+        self.assertIn("nothing committed or pushed", err)
+        self.assertNotIn(CANARY, out + err)
+        self.assertEqual(git("--git-dir", remote, "branch", "--list").stdout.strip(), "")
+        with open(state) as handle:
+            self.assertEqual(handle.read(), before)
+
+
 class DoctorTest(CliTestCase):
     def test_healthy_setup_has_no_failures(self):
         self.init()
@@ -423,6 +703,79 @@ class DoctorTest(CliTestCase):
         self.assertEqual(code, 0, out)
         self.assertNotIn("FAIL", out)
         self.assertIn("OK   ccusage", out)
+
+    def hashing_line(self):
+        lines = self.cli("doctor")[1].splitlines()
+        return next(line for line in lines if line[5:].startswith("hash_names:"))
+
+    def test_hashing_on_is_ok_and_off_warns_naming_the_key(self):
+        self.init()
+        self.assertTrue(self.hashing_line().startswith("OK   "))
+        self.edit_config(hash_names=False)
+        line = self.hashing_line()
+        self.assertTrue(line.startswith("WARN "), line)
+        self.assertIn("set hash_names to true", line)
+
+    def ccusage_lines(self):
+        lines = self.cli("doctor")[1].splitlines()
+        return [line for line in lines if line[5:].startswith("ccusage:")]
+
+    def write_plist(self, environment):
+        folder = os.path.join(self.environ["HOME"], "Library", "LaunchAgents")
+        os.makedirs(folder, exist_ok=True)
+        path = os.path.join(folder, "io.github.claude-usage-collector.plist")
+        with open(path, "wb") as handle:
+            plistlib.dump({"Label": "io.github.claude-usage-collector",
+                           "EnvironmentVariables": environment}, handle)
+
+    def test_bare_command_without_an_installed_agent_is_ok_when_found(self):
+        self.init()
+        self.fake_command("ccusage")
+        lines = self.ccusage_lines()
+        self.assertEqual(len(lines), 1, lines)
+        self.assertTrue(lines[0].startswith("OK   "), lines)
+
+    def test_command_found_on_the_installed_agent_path_is_ok(self):
+        self.init()
+        self.fake_command("ccusage")
+        self.write_plist({"PATH": self.bin + ":/usr/bin:/bin"})
+        lines = self.ccusage_lines()
+        self.assertEqual(len(lines), 1, lines)
+        self.assertTrue(lines[0].startswith("OK   "), lines)
+        self.assertIn("launchd", lines[0])
+
+    def test_command_missing_from_the_installed_agent_path_warns(self):
+        self.init()
+        self.fake_command("ccusage")
+        for environment in ({"PATH": "/usr/bin:/bin"}, {}):
+            with self.subTest(environment=environment):
+                self.write_plist(environment)
+                lines = self.ccusage_lines()
+                self.assertEqual(len(lines), 1, lines)
+                self.assertTrue(lines[0].startswith("WARN "), lines)
+                self.assertIn("launchd cannot find ccusage", lines[0])
+                self.assertIn("install/install.sh", lines[0])
+                self.assertNotIn(self.bin, lines[0])
+
+    def test_absolute_command_that_resolves_is_ok(self):
+        self.init()
+        self.fake_command("ccusage")
+        self.edit_config(crosscheck={
+            "command": os.path.join(self.bin, "ccusage"), "enabled": True})
+        self.write_plist({"PATH": "/usr/bin:/bin"})
+        lines = self.ccusage_lines()
+        self.assertEqual(len(lines), 1, lines)
+        self.assertTrue(lines[0].startswith("OK   "), lines)
+
+    def test_absolute_command_that_does_not_resolve_warns_without_echoing_it(self):
+        self.init()
+        missing = self.tmp.join("nowhere", "ccusage")
+        self.edit_config(crosscheck={"command": missing, "enabled": True})
+        lines = self.ccusage_lines()
+        self.assertEqual(len(lines), 1, lines)
+        self.assertTrue(lines[0].startswith("WARN "), lines)
+        self.assertIn("not found", lines[0])
+        self.assertNotIn(missing, lines[0])
 
     def retention(self):
         lines = self.cli("doctor")[1].splitlines()

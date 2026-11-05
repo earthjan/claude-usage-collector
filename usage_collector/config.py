@@ -16,7 +16,7 @@ DEFAULTS = {
     "destination": {"type": "folder", "path": "~/usage-data"},
     "round_ts_to_hour": False,
     "hash_agent_types": False,
-    "hash_names": False,
+    "hash_names": True,
     "schedule": "18:00",
     "crosscheck": {"command": "ccusage", "enabled": True, "period": "week"},
     "weights": {"input": 1, "cache_read": 0.1, "cache_write": 2, "output": 5},
@@ -42,6 +42,10 @@ def salt_path(config_path: str) -> str:
 
 def state_path(config_path: str) -> str:
     return os.path.join(os.path.dirname(config_path), "state.json")
+
+
+def name_map_path(config_path: str) -> str:
+    return os.path.join(os.path.dirname(config_path), "names.json")
 
 
 def expand(path: str) -> str:
@@ -102,10 +106,22 @@ def load_config(path: str) -> dict:
 def _with_defaults(data: dict) -> dict:
     merged = copy.deepcopy(DEFAULTS)
     merged.update(data)
+    merged["hash_names"] = _hash_names(data)
     destination = merged["destination"]
     if isinstance(destination, dict) and destination.get("type") == "git":
         merged["destination"] = dict(GIT_DEFAULTS, **destination)
     return merged
+
+
+def _hash_names(data: dict):
+    """On unless hash_names is false and the older hash_agent_types is not true.
+
+    An older init wrote hash_agent_types false as its default, not as a
+    choice, so false there leaves the decision to hash_names.
+    """
+    if data.get("hash_agent_types") is True:
+        return True
+    return data.get("hash_names", True)
 
 
 def validate(data: dict) -> None:

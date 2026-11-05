@@ -67,7 +67,7 @@ class InitTest(ConfigTestCase):
         config.init_config(self.path, account="work")
         with open(self.path) as handle:
             written = json.load(handle)
-        self.assertIs(written["hash_names"], False)
+        self.assertIs(written["hash_names"], True)
         self.assertNotIn("hash_agent_types", written)
 
     def test_init_refuses_to_overwrite_without_force(self):
@@ -97,12 +97,30 @@ class LoadTest(ConfigTestCase):
         loaded = config.load_config(self.path)
         self.assertEqual(loaded["sources"], ["~/.claude/projects"])
         self.assertIs(loaded["round_ts_to_hour"], False)
-        self.assertIs(loaded["hash_agent_types"], False)
-        self.assertIs(loaded["hash_names"], False)
+        self.assertIs(loaded["hash_names"], True)
         self.assertIsNone(loaded["machine_label"])
         self.assertEqual(
             loaded["crosscheck"], {"command": "ccusage", "enabled": True, "period": "week"},
         )
+
+    def test_hash_names_precedence(self):
+        cases = (
+            ({}, True),
+            ({"hash_agent_types": False}, True),
+            ({"hash_agent_types": True}, True),
+            ({"hash_names": False, "hash_agent_types": True}, True),
+            ({"hash_names": True, "hash_agent_types": False}, True),
+            ({"hash_names": False}, False),
+            ({"hash_names": False, "hash_agent_types": False}, False),
+        )
+        for keys, expected in cases:
+            with self.subTest(keys=keys):
+                self.write(dict({"account": "work"}, **keys))
+                self.assertIs(config.load_config(self.path)["hash_names"], expected)
+
+    def test_name_map_lives_beside_config(self):
+        self.assertEqual(config.name_map_path(self.path),
+                         os.path.join(os.path.dirname(self.path), "names.json"))
 
     def test_crosscheck_period_can_be_month_and_old_objects_still_load(self):
         for crosscheck in ({"command": "ccusage", "enabled": True, "period": "month"},

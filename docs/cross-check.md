@@ -77,11 +77,44 @@ claude-usage crosscheck --week 2026-W09
 claude-usage crosscheck --month 2025-12
 ```
 
-The automatic run is skipped quietly when `crosscheck.enabled` is `false`
-or the command is not on `PATH`. Set `crosscheck.command` to a full path if
-`ccusage` lives somewhere the schedule cannot see. To go back to the older
-monthly schedule, set `crosscheck.period` to `"month"`. The run then checks
-the previous UTC month once, and `crosscheck` without a flag does the same.
+The automatic run is skipped quietly when `crosscheck.enabled` is `false`.
+When the command cannot be found it is skipped too, and the run log gets
+one line: `skipped cross-check: ccusage command not found`. To go back to the older monthly schedule,
+set `crosscheck.period` to `"month"`. The run then checks the previous UTC
+month once, and `crosscheck` without a flag does the same.
+
+### When ccusage comes from nvm or another version manager
+
+**The launchd agent runs with the `PATH` of the shell that ran
+`install/install.sh`, saved into the agent when it was installed.** A bare
+`ccusage` works as long as it was on that `PATH`. A version manager such
+as nvm puts the Node version into the folder name, so after a Node upgrade
+the saved `PATH` points at a folder that is gone. The cross-check is then
+skipped with one line in the run log, and no week is stored. Run the
+installer again, or put the absolute path in `crosscheck.command`:
+
+```json
+"crosscheck": {"command": "~/.nvm/versions/node/<version>/bin/ccusage", "enabled": true, "period": "week"}
+```
+
+`crosscheck.command` can be a bare name, found through `PATH`, or a path.
+A path may start with `~/`, which means your home folder. Run
+`command -v ccusage` in a terminal to see the path to use.
+
+A full path alone is not always enough. A ccusage installed with npm starts
+with `#!/usr/bin/env node`, so it still needs `node` on `PATH`. To make that
+work, the collector adds two folders to the front of `PATH` for the
+ccusage process only: the folder of the path you gave, and the folder of
+the file it finally points to after following symlinks. A version manager
+keeps `node` in one of those, so it is found. Nothing else the collector
+runs sees the changed `PATH`.
+
+The path names a Node version, so **upgrading Node through the version
+manager changes it**. Update `crosscheck.command` after an upgrade, or the
+cross-check stops running. `claude-usage doctor` checks the command
+against the `PATH` the installed launchd agent runs with, and warns when
+launchd cannot find it. Without an installed agent it checks your own
+`PATH`.
 
 ### Why weekly: transcript retention
 

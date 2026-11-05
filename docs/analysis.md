@@ -19,6 +19,8 @@ claude-usage report  --store ~/usage-data --out report.html --since 2026-01-01
 | `--account LABEL` | `analyze` | Only rows for one account. |
 | `--out PATH` | `report` | Where to write the HTML. Default `report.html`. |
 | `--svg PATH` | `report` | Also write the daily chart as a standalone SVG file. |
+| `--names PATH` | both | Show plain names from this name map. Defaults to the local map beside your config, when it exists. |
+| `--no-names` | both | Show names as stored, as hashes, even when a map exists. |
 
 A demo report built from synthetic data is in
 [demo/report.html](demo/report.html). The demo store holds two accounts and
@@ -33,6 +35,51 @@ python3 -m usage_collector --config /nonexistent report \
 
 `--config /nonexistent` makes sure your own `weights` and `prices` do not
 change the demo.
+
+## How names are shown
+
+**`analyze` and `report` show the plain name for every hash the name map
+knows, and the hash for every other name.** Names in the store are hashes
+(see [privacy.md](privacy.md#the-local-name-map)), so without a map an
+agent type or skill shows as 12 hex characters. The map is `names.json`
+beside your config; `collect` fills it on the machine that read the
+transcripts. Use `--names PATH` to read a map from somewhere else, or
+`--no-names` to see the hashes.
+
+Display names appear only in the text or HTML you asked for. The map is
+never copied into the output as a whole, and the store is not changed.
+
+A report built with the map shows plain names, so treat `report.html` (and
+any `--svg` file) like the map: keep it on your machine. Use `--no-names`
+for a report you want to share. While the map is in use, `report` refuses
+to write either file inside the store.
+
+If the default map cannot be read, `analyze` and `report` print a warning
+and show hashes. A map you pass with `--names` must be readable, or the
+command fails.
+
+### Names from another machine
+
+**A hash from another machine resolves only if that machine used the same
+salt.** Each machine hashes with its own salt by default, so the same skill
+gets a different hash on each one, and your map knows only your own
+hashes. A research machine that reads the whole store sees plain names for
+its own rows and hashes for everyone else's.
+
+You can copy the salt between your own machines so that every name, project
+and session gets the same hash everywhere (see
+[multi-account.md](multi-account.md#matching-hashes-across-machines)).
+That buys two things: one name map resolves names from every machine, and
+per-name figures line up across machines. It costs some privacy: anyone
+who gets that one salt can test guessed names against every machine's
+rows, not just one. Keep separate salts if the machines belong to
+different employers or you never need to compare them. Never share a salt
+with anyone else.
+
+Names written before hashing was switched on are stored plain. The map
+turns the later hashes back into the same plain names, so on the machine
+that collected them, the figures for a name join up again across the
+switch.
 
 ## What the report answers
 
@@ -73,8 +120,8 @@ goes to subagents and to large contexts.**
   Then the names the catalog listed during the period that were never
   used: skills that were never invoked, and agent types that were never
   spawned (checked against the usage rows' `agent_type`). A listed name
-  that is not a slug, for example one containing `/` or longer than 64
-  characters, is stored as a hash, so it shows as 12 hex characters here.
+  shows as 12 hex characters here when the name map does not know its
+  hash.
 
 The report adds three pieces for these: a stacked bar of the average
 starting context by part, a weekly starting-context trend chart, and a
