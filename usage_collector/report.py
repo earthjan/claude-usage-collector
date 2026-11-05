@@ -14,23 +14,24 @@ from .name_map import NameMapError
 from .store import StoreError
 
 SVG_NS = "http://www.w3.org/2000/svg"
-FONT_STACK = ('-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, '
-              '"Helvetica Neue", Arial, sans-serif')
-MONO_STACK = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
+FONT_STACK = ('"Anthropic Sans", -apple-system, BlinkMacSystemFont, '
+              '"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif')
+MONO_STACK = ('"Anthropic Mono", ui-monospace, SFMono-Regular, Menlo, '
+              'Consolas, monospace')
 
 THEME_LIGHT = {
-    "bg": "#f6f6f4", "surface": "#fcfcfb", "border": "#e4e3de",
-    "text": "#1b1b1a", "muted": "#52514e", "faint": "#8a8984",
-    "grid": "#ecebe7", "series-1": "#2a78d6", "series-2": "#eb6834",
-    "series-3": "#1baf7a", "series-4": "#eda100", "series-5": "#e87ba4",
-    "series-6": "#008300", "series-7": "#6250d6", "rest": "#c9c8c2",
+    "bg": "#faf9f5", "surface": "#ffffff", "border": "#dedcd1",
+    "text": "#141413", "muted": "#5e5d59", "faint": "#87867f",
+    "grid": "#f0eee6", "series-1": "#6a9bcc", "series-2": "#d97757",
+    "series-3": "#788c5d", "series-4": "#c9a82d", "series-5": "#c46686",
+    "series-6": "#2e9191", "series-7": "#6b4d9e", "rest": "#c2c0b6",
 }
 THEME_DARK = {
-    "bg": "#121211", "surface": "#1a1a19", "border": "#2e2e2b",
-    "text": "#f0efec", "muted": "#c3c2b7", "faint": "#8f8e86",
-    "grid": "#272725", "series-1": "#3987e5", "series-2": "#d95926",
-    "series-3": "#199e70", "series-4": "#c98500", "series-5": "#d55181",
-    "series-6": "#008300", "series-7": "#9085e9", "rest": "#4a4a46",
+    "bg": "#141413", "surface": "#1f1e1d", "border": "#3d3d3a",
+    "text": "#faf9f5", "muted": "#c2c0b6", "faint": "#87867f",
+    "grid": "#30302e", "series-1": "#6a9bcc", "series-2": "#d97757",
+    "series-3": "#788c5d", "series-4": "#c9a82d", "series-5": "#c46686",
+    "series-6": "#2e9191", "series-7": "#9c86c4", "rest": "#4d4c48",
 }
 CHART_CSS = """
 .bar.main, .swatch.main, .dot.main { fill: var(--series-1); }

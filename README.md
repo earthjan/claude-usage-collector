@@ -1,5 +1,10 @@
 # claude-usage-collector
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/hero-dark.png">
+  <img alt="Not another telemetry pipeline. claude-usage-collector reads the transcripts Claude Code already writes, uses ccusage totals as a cross-check and sits beside the OpenTelemetry export, to give one private view across every account: subagent share, starting context size, skills listed but never used, and cost by agent type. Zero tokens, no server, nothing new to instrument." src="docs/img/hero-light.png" width="960">
+</picture>
+
 Turn your Claude Code transcripts into number-only usage rows and context
 sizes, and combine several machines and accounts into one private store you
 can study.
