@@ -42,18 +42,38 @@ def reduce_daily(data, period: str, salt: bytes) -> dict:
     first, last = (day.isoformat() for day in periods.bounds(period))
     totals = {}
     entries = data.get("daily") if isinstance(data, dict) else None
-    for entry in entries if isinstance(entries, list) else ():
-        if not _entry_in_range(entry, first, last):
+    entries = [entry for entry in entries if isinstance(entry, dict)] if isinstance(entries, list) else []
+    for entry in _claude_entries(entries):
+        day = _entry_day(entry)
+        if not day or not first <= day <= last:
             continue
         for breakdown in _breakdowns(entry):
-            _add_breakdown(totals.setdefault(entry["date"], {}), breakdown, salt)
+            _add_breakdown(totals.setdefault(day, {}), breakdown, salt)
     return {day: models for day, models in totals.items() if models}
 
 
-def _entry_in_range(entry, first: str, last: str) -> bool:
-    if not isinstance(entry, dict) or not guard.is_date(entry.get("date")):
+def _entry_day(entry: dict):
+    for key in ("date", "period"):
+        if guard.is_date(entry.get(key)):
+            return entry[key]
+    return None
+
+
+def _claude_entries(entries: list) -> list:
+    """Newer ccusage output repeats each day per agent plus an "all" total."""
+    claude_days = {_entry_day(entry) for entry in entries if entry.get("agent") == "claude"}
+    return [entry for entry in entries if _is_claude_entry(entry, claude_days)]
+
+
+def _is_claude_entry(entry: dict, claude_days: set) -> bool:
+    agent = entry.get("agent")
+    if agent is None or agent == "claude":
+        return True
+    if agent != "all" or _entry_day(entry) in claude_days:
         return False
-    return first <= entry["date"] <= last
+    metadata = entry.get("metadata")
+    agents = metadata.get("agents") if isinstance(metadata, dict) else None
+    return agents is None or agents == ["claude"]
 
 
 def _breakdowns(entry: dict) -> list:

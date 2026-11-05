@@ -49,6 +49,10 @@ EXPECTED = {
     }
 }
 
+OPUS_ONE = {"modelName": "claude-opus-5-5", "inputTokens": 1, "outputTokens": 1,
+            "cacheCreationTokens": 1, "cacheReadTokens": 1}
+ONES = {"input": 1, "output": 1, "cache_write": 1, "cache_read": 1}
+
 
 class ReduceDailyTest(unittest.TestCase):
     def test_keeps_only_allowlisted_numbers_for_the_month(self):
@@ -67,6 +71,30 @@ class ReduceDailyTest(unittest.TestCase):
         data = {"daily": [{"date": "2026-02-03", "modelBreakdowns": [entry]}]}
         counts = crosscheck.reduce_daily(data, "2026-02", support.SALT)["2026-02-03"]["claude-opus-5-5"]
         self.assertEqual(counts, {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0})
+
+    def test_reads_the_period_field_of_newer_ccusage_output(self):
+        data = {"daily": [{"period": "2026-02-03", "agent": "all",
+                           "metadata": {"agents": ["claude"]},
+                           "modelBreakdowns": [OPUS_ONE]}]}
+        totals = crosscheck.reduce_daily(data, "2026-02", support.SALT)
+        self.assertEqual(totals, {"2026-02-03": {"claude-opus-5-5": ONES}})
+
+    def test_counts_a_day_once_when_claude_and_all_entries_both_exist(self):
+        data = {"daily": [
+            {"period": "2026-02-03", "agent": "all", "modelBreakdowns": [OPUS_ONE]},
+            {"period": "2026-02-03", "agent": "claude", "modelBreakdowns": [OPUS_ONE]},
+        ]}
+        totals = crosscheck.reduce_daily(data, "2026-02", support.SALT)
+        self.assertEqual(totals, {"2026-02-03": {"claude-opus-5-5": ONES}})
+
+    def test_skips_entries_for_other_agents(self):
+        data = {"daily": [
+            {"period": "2026-02-03", "agent": "codex", "modelBreakdowns": [OPUS_ONE]},
+            {"period": "2026-02-03", "agent": "all",
+             "metadata": {"agents": ["claude", "codex"]},
+             "modelBreakdowns": [OPUS_ONE]},
+        ]}
+        self.assertEqual(crosscheck.reduce_daily(data, "2026-02", support.SALT), {})
 
     def test_non_object_input_gives_no_totals(self):
         for data in ([], "text", {"daily": "text"}, None):
