@@ -167,9 +167,9 @@ ts,account,machine,project,session,agent,is_subagent,agent_type,spawn_depth,is_f
 2026-04-03T19:38:02Z,work,bf8d5b88ce26,ee8e9aa3f0f8,26a3a6b0a484,,0,,,0,claude-opus-5-5,medium,53,284992,7540,685,292585,0,0,,0
 2026-04-03T19:39:35Z,work,bf8d5b88ce26,ee8e9aa3f0f8,26a3a6b0a484,,0,,,0,claude-opus-5-5,,19,290487,6295,612,296801,0,0,Edit;Grep;WebFetch,0
 2026-04-03T19:41:43Z,work,bf8d5b88ce26,ee8e9aa3f0f8,26a3a6b0a484,,0,,,0,claude-opus-5-5,high,12,292494,12923,1010,305429,0,0,,0
-2026-04-03T19:42:05Z,work,bf8d5b88ce26,ee8e9aa3f0f8,26a3a6b0a484,,0,,,0,claude-opus-5-5,,5,304026,4211,332,308242,0,0,Bash;Glob;WebFetch,0
-2026-04-03T19:43:11Z,work,bf8d5b88ce26,ee8e9aa3f0f8,26a3a6b0a484,,0,,,0,claude-opus-5-5,,14,303397,14535,3354,317946,0,0,,0
-2026-04-03T19:43:34Z,work,bf8d5b88ce26,ee8e9aa3f0f8,26a3a6b0a484,,0,,,0,claude-opus-5-5,medium,8,313594,13058,222,326660,0,0,Bash,0
-2026-04-03T19:44:04Z,work,bf8d5b88ce26,ee8e9aa3f0f8,26a3a6b0a484,,0,,,0,claude-opus-5-5,medium,47,324948,5138,136,330133,0,0,,0
-2026-04-03T19:46:12Z,work,bf8d5b88ce26,ee8e9aa3f0f8,26a3a6b0a484,,0,,,0,claude-opus-5-5,high,25,327445,8066,127,335536,0,0,Edit,0
-2026-04-03T19:47:11Z,work,bf8d5b88ce26,ee8e9aa3f0f8,26a3a6b0a484,,0,,,0,claude-opus-5-5,medium,1,335202,1004,266,336207,0,0,WebFetch,0
+2026-04-03T19:42:54Z,work,bf8d5b88ce26,ee8e9aa3f0f8,26a3a6b0a484,,0,,,0,claude-opus-5-5,high,5,30436,1730,902,32171,0,0,Bash;Glob;WebFetch,1
+2026-04-03T19:44:00Z,work,bf8d5b88ce26,ee8e9aa3f0f8,26a3a6b0a484,,0,,,0,claude-opus-5-5,,14,27326,14535,3354,41875,0,0,,0
+2026-04-03T19:44:23Z,work,bf8d5b88ce26,ee8e9aa3f0f8,26a3a6b0a484,,0,,,0,claude-opus-5-5,medium,8,37523,13058,222,50589,0,0,Bash,0
+2026-04-03T19:44:53Z,work,bf8d5b88ce26,ee8e9aa3f0f8,26a3a6b0a484,,0,,,0,claude-opus-5-5,medium,47,48877,5138,136,54062,0,0,,0
+2026-04-03T19:47:01Z,work,bf8d5b88ce26,ee8e9aa3f0f8,26a3a6b0a484,,0,,,0,claude-opus-5-5,high,25,51374,8066,127,59465,0,0,Edit,0
+2026-04-03T19:48:00Z,work,bf8d5b88ce26,ee8e9aa3f0f8,26a3a6b0a484,,0,,,0,claude-opus-5-5,medium,1,59131,1004,266,60136,0,0,WebFetch,0

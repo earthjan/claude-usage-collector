@@ -116,6 +116,110 @@ class ValidateRowsTest(unittest.TestCase):
         self.assertEqual(problems, ["row 0: column agent is invalid"])
 
 
+def context_row(**overrides):
+    row = {
+        "ts": "2026-01-02T03:04:05Z", "account": "work",
+        "machine": "0123456789ab", "project": "abcdef012345",
+        "session": "fedcba987654", "agent": "", "is_subagent": "0",
+        "agent_type": "", "event": "start",
+        "system_prompt_chars": "1500", "instr_user_chars": "100",
+        "instr_project_chars": "200", "instr_local_chars": "30",
+        "instr_memory_chars": "40", "instr_other_chars": "50",
+        "instr_files": "5", "skill_listing_chars": "300", "skill_count": "3",
+        "agent_listing_chars": "100", "agent_count": "2",
+        "deferred_tools_chars": "179", "deferred_tool_count": "3",
+        "mcp_chars": "250", "mcp_server_count": "1",
+        "hook_context_chars": "100", "first_turn_context": "1210",
+    }
+    row.update(overrides)
+    return row
+
+
+def skill_row(**overrides):
+    row = {
+        "ts": "2026-01-02T03:04:05Z", "account": "work",
+        "machine": "0123456789ab", "project": "abcdef012345",
+        "session": "fedcba987654", "agent": "", "skill": "plugin-x:review",
+    }
+    row.update(overrides)
+    return row
+
+
+def catalog_row(**overrides):
+    row = {"date": "2026-01-02", "account": "work", "machine": "0123456789ab",
+           "kind": "skill", "name": "plugin-x:review"}
+    row.update(overrides)
+    return row
+
+
+STREAM_ROWS = {"context": context_row, "skills": skill_row, "catalog": catalog_row}
+
+
+class ValidateStreamTest(unittest.TestCase):
+    def test_valid_rows_of_every_stream_have_no_problems(self):
+        rows = {
+            "usage": [valid_row()],
+            "context": [context_row(), context_row(
+                agent="aaaaaaaaaaaa", is_subagent="1", agent_type="Explore",
+                event="compact")],
+            "skills": [skill_row(), skill_row(agent="aaaaaaaaaaaa")],
+            "catalog": [catalog_row(), catalog_row(kind="agent", name="Explore")],
+        }
+        for stream, stream_rows in rows.items():
+            with self.subTest(stream=stream):
+                self.assertEqual(guard.validate_stream(stream, stream_rows), [])
+
+    def test_free_text_rejected_in_every_column_without_echoing_it(self):
+        for stream, make in STREAM_ROWS.items():
+            for column in guard.SCHEMAS[stream].columns:
+                with self.subTest(stream=stream, column=column):
+                    problems = guard.validate_stream(stream, [make(**{column: FREE_TEXT})])
+                    self.assertIn(
+                        "%s row 0: column %s is invalid" % (stream, column), problems)
+                    self.assertNotIn("login", " ".join(problems))
+
+    def test_unknown_and_missing_columns_are_problems(self):
+        extra = dict(context_row(), model="claude-opus-5-5")
+        missing = skill_row()
+        del missing["skill"]
+        self.assertEqual(guard.validate_stream("context", [extra]),
+                         ["context row 0: unknown column"])
+        self.assertEqual(guard.validate_stream("skills", [missing]),
+                         ["skills row 0: column skill is missing"])
+
+    def test_rejects_specific_bad_values(self):
+        cases = [
+            ("context", "event", "resume"),
+            ("context", "instr_files", "-1"),
+            ("context", "first_turn_context", "1000000001"),
+            ("context", "agent_type", "has space"),
+            ("skills", "skill", ""),
+            ("skills", "agent", "abc"),
+            ("catalog", "kind", "tool"),
+            ("catalog", "date", "2026-02-30"),
+            ("catalog", "name", ""),
+        ]
+        for stream, column, value in cases:
+            with self.subTest(stream=stream, column=column, value=value):
+                problems = guard.validate_stream(
+                    stream, [STREAM_ROWS[stream](**{column: value})])
+                self.assertIn("%s row 0: column %s is invalid" % (stream, column), problems)
+
+    def test_main_thread_context_row_cannot_carry_an_agent(self):
+        problems = guard.validate_stream("context", [context_row(agent="aaaaaaaaaaaa")])
+        self.assertEqual(problems, ["context row 0: column agent is invalid"])
+
+    def test_usage_problems_keep_their_old_wording(self):
+        problems = guard.validate_stream("usage", [valid_row(model="x y")])
+        self.assertEqual(problems, ["row 0: column model is invalid"])
+
+    def test_validate_streams_covers_every_batch(self):
+        problems = guard.validate_streams({
+            "usage": [valid_row()], "catalog": [catalog_row(kind="tool")],
+        })
+        self.assertEqual(problems, ["catalog row 0: column kind is invalid"])
+
+
 class ValidateCheckTotalsTest(unittest.TestCase):
     def totals(self):
         return {

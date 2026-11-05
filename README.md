@@ -1,17 +1,32 @@
 # claude-usage-collector
 
-Turn your Claude Code transcripts into number-only usage rows, and combine
-several machines and accounts into one private store you can study.
+Turn your Claude Code transcripts into number-only usage rows and context
+sizes, and combine several machines and accounts into one private store you
+can study.
 
 It costs zero tokens. It is plain Python 3.9 with no dependencies. It runs
 once a day on each machine, reads only new transcript lines, and writes CSV.
+
+Three readers fill the store:
+
+- **Usage rows:** one row per assistant message, with its token counts,
+  model, tools and agent.
+- **Context sizes:** how big each context was before its first turn, and
+  what it was made of (system prompt, instruction files, skill and agent
+  listings, deferred tools, MCP instructions, hook output), as character
+  lengths and counts. Two small files beside it record which skills were
+  used and which skill and agent names were offered.
+- **A weekly ccusage cross-check:** daily totals from
+  [ccusage](https://github.com/ryoppippi/ccusage), stored so `compare` can
+  check the rows against an independent reading.
 
 ## Privacy guarantee
 
 **Only numbers, short labels and salted hashes ever leave the machine.**
 Prompts, replies, thinking, code, tool inputs and outputs, session titles,
 agent descriptions, file paths, project names and branch names stay where
-they were written.
+they were written. So does the text of your instruction files, skills,
+listings, hook output and system prompt: only its length is counted.
 
 Three things make that hold:
 
@@ -21,15 +36,17 @@ Three things make that hold:
 - **Salted hashes.** Project, session, agent and machine names become a
   12 character HMAC-SHA256 hash. The key (the salt) is created on your
   machine and never written to the store.
-- **A fail-closed guard.** Every row passes a strict check on all 21 columns
-  before it is written. One bad value means nothing is written and the run
-  exits non-zero. Error messages name the row and column, never the value.
+- **A fail-closed guard.** Every row of every file passes a strict check
+  of every column before it is written. Each file kind has its own schema.
+  One bad value anywhere means nothing is written and the run exits
+  non-zero. Error messages name the file kind, row and column, never the
+  value.
 
 You can see exactly what would leave with `claude-usage collect --dry-run`.
 The full details, including what the hashes do not protect, are in
 [docs/privacy.md](docs/privacy.md).
 
-![Several machines each run a collector and guard, push number-only rows to one private store, and a research machine reads it](docs/img/architecture.svg)
+![Several machines each run three readers and a guard, push number-only files to one private store, and a research machine reads it](docs/img/architecture.svg)
 
 ## What you get
 
@@ -37,7 +54,9 @@ Once rows are in a store, two commands turn them into findings:
 
 - `claude-usage analyze` prints a text report: totals, main thread versus
   subagents, usage by model and by agent type, context size bands, the
-  agents and sessions with the most weighted usage.
+  agents and sessions with the most weighted usage, how big a context is
+  before any work starts and what it is made of, the skills used most, and
+  the skills and agent types that were offered but never used.
 - `claude-usage report` draws the main breakdowns from `analyze` as charts
   on one static HTML page. It works offline and needs no JavaScript.
 
@@ -85,11 +104,11 @@ from `$CLAUDE_USAGE_CONFIG`, then `~/.config/claude-usage-collector/config.json`
 | Command | What it does |
 |---|---|
 | `init --account LABEL [--dest-type folder\|git] [--dest PATH] [--schedule HH:MM] [--force]` | Write the config and the salt. Refuses to replace a config without `--force`, and keeps the salt even then. |
-| `collect [--dry-run]` | Read new transcript lines, guard the rows, append them to the store, save read positions. `--dry-run` prints row counts per day and three sample rows, and writes nothing. |
+| `collect [--dry-run]` | Read new transcript lines, guard the rows of every stream, append them to the store, save read positions. `--dry-run` prints usage row counts per day, the number of context events, skill uses and catalog names, and three sample rows, and writes nothing. |
 | `sync` | For a git store: commit, `pull --rebase`, push. Does nothing for a folder store. |
-| `run` | `collect`, then the monthly cross-check if it is due, then `sync`. This is what the daily schedule calls. |
-| `crosscheck [--month YYYY-MM]` | Ask `ccusage` for daily totals of one month (default: last month) and store them under `checks/`. |
-| `compare [--store PATH] [--month YYYY-MM] [--tolerance 0.02]` | Compare summed rows with the `ccusage` totals. Exits non-zero if any gap is over the tolerance. |
+| `run` | `collect`, then the weekly cross-check for each missed completed week up to 21 days back (see [docs/cross-check.md](docs/cross-check.md)), then `sync`. This is what the daily schedule calls. |
+| `crosscheck [--week YYYY-Www] [--month YYYY-MM]` | Ask `ccusage` for daily totals of one ISO week (default: the last completed week, or month when `crosscheck.period` is `month`) or one month, and store them under `checks/`. |
+| `compare [--store PATH] [--week YYYY-Www] [--month YYYY-MM] [--tolerance 0.02]` | Compare summed rows with the `ccusage` totals. Without `--week` or `--month` it checks every stored period. Exits non-zero if any gap is over the tolerance. |
 | `analyze [--store PATH] [--since YYYY-MM-DD] [--account LABEL]` | Print a text usage report. |
 | `report [--store PATH] [--out report.html] [--since YYYY-MM-DD] [--svg PATH]` | Write a static HTML report. `--svg` also writes the daily chart as an SVG file. |
 | `doctor` | Check config, salt, store, git remote, schedule, `ccusage` and transcript retention. Changes nothing. |
@@ -103,11 +122,11 @@ machine only needs a clone of the store:
 
 - [Architecture](docs/architecture.md): the modules and one daily run, step by step.
 - [Privacy](docs/privacy.md): the allowlist, the guard, the threat model, and how to audit.
-- [Schema](docs/schema.md): every column and the store layout.
+- [Schema](docs/schema.md): every column of every file, and the store layout.
 - [Configuration](docs/configuration.md): every config key and file location.
 - [Multiple machines and accounts](docs/multi-account.md): setting up a shared private store.
 - [Cross-check](docs/cross-check.md): how `ccusage` is used to check the numbers.
-- [Analysis](docs/analysis.md): `analyze`, `report`, weights and prices.
+- [Analysis](docs/analysis.md): `analyze`, `report`, starting context, weights and prices.
 
 ## FAQ
 
@@ -117,10 +136,11 @@ machine only needs a clone of the store:
 reads the transcripts on demand and prints totals. It does not keep a
 history once Claude Code deletes old transcripts, and it does not combine
 several machines or accounts. It also does not split usage by subagent,
-agent type or context size, which is the point of this tool.
+agent type or context size, or show what your contexts are made of, which
+is the point of this tool.
 
 So this tool uses `ccusage` as an independent check instead of a
-replacement. Once a month it stores the `ccusage` daily totals next to the
+replacement. Once a week it stores the `ccusage` daily totals next to the
 rows, and `compare` shows any gap. See [docs/cross-check.md](docs/cross-check.md).
 
 ### Why not OpenTelemetry?
@@ -139,7 +159,11 @@ it. The two answer different questions.
 
 Yes, if you wait too long. **Claude Code deletes transcripts older than
 `cleanupPeriodDays`, which defaults to 30 days.** Anything deleted before a
-run is gone for good. Set a longer period in `~/.claude/settings.json`:
+run is gone for good.
+
+The default is enough for the daily run and the weekly cross-check, so you
+do not have to change it. Set a longer period in `~/.claude/settings.json`
+if you expect to leave a machine off for weeks:
 
 ```json
 {
@@ -147,7 +171,25 @@ run is gone for good. Set a longer period in `~/.claude/settings.json`:
 }
 ```
 
-`claude-usage doctor` warns when this is unset or below 90.
+`claude-usage doctor` warns when it is set below 22 (the weekly check can
+catch up on a week that started 21 days ago), or below 62 when
+`crosscheck.period` is `"month"`.
+
+### What happens when I upgrade an existing install?
+
+Pull the repo and keep your config and state. Old config keys keep
+working, and a config without `crosscheck.period` uses the weekly check.
+`hash_agent_types` is now an alias of `hash_names`, so with it set to
+`true` tool names in usage rows are hashed too, as are skill and catalog
+names. Rows written before the upgrade keep their plain tool names, so a
+per-tool breakdown splits at the upgrade date. The first run after the
+upgrade reads context sizes, skill uses and listed names from the start of
+every transcript still on disk, and carries on with usage rows where it
+left off, so no usage row is written twice. That first run is slower and
+uses more memory than a daily run, and the state file grows, because it
+remembers every message id it reads for 60 days to tell copied history
+apart. See
+[docs/architecture.md](docs/architecture.md#separate-offsets-per-stream).
 
 ### Does it cost tokens or call any API?
 

@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="476" viewBox="0 0 960 476" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="508" viewBox="0 0 960 508" role="img" aria-labelledby="title desc">
   <title id="title">claude-usage-collector architecture</title>
-  <desc id="desc">Several machines each run a collector and guard that turn local transcripts into number-only rows, push them to one private data store, and a research machine reads that store. ccusage provides a monthly cross-check.</desc>
+  <desc id="desc">Several machines each run three readers (usage rows, context sizes and a weekly ccusage cross-check) and a guard that turns local transcripts into number-only files, push them to one private data store, and a research machine reads that store.</desc>
   <style>
     .bg { fill: #f6f8fa; }
     .card { fill: #ffffff; stroke: #d0d7de; stroke-width: 1; }
@@ -58,68 +58,81 @@
     <marker id="m-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-purple" d="M0,0 L10,5 L0,10 z"/></marker>
     <marker id="m-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-red" d="M0,0 L10,5 L0,10 z"/></marker>
   </defs>
-  <rect class="bg" x="0" y="0" width="960" height="476" rx="16"/>
+  <rect class="bg" x="0" y="0" width="960" height="508" rx="16"/>
   <text x="32" y="40" class="h">How the pieces fit</text>
-  <text x="200" y="40" class="s">each machine sends numbers only, into one private store</text>
-  <rect class="card" x="32" y="68" width="380" height="100" rx="10"/>
+  <text x="200" y="40" class="s">each machine runs three readers and a guard, and sends numbers only</text>
+  <rect class="card" x="32" y="68" width="420" height="188" rx="10"/>
   <text x="48" y="92" class="b">Machine A, account: work</text>
-  <rect class="purple" x="320" y="78" width="76" height="22" rx="11"/>
-  <text x="358" y="93" class="s" text-anchor="middle">ccusage</text>
-  <rect class="card" x="48" y="110" width="150" height="44" rx="8"/>
-  <text x="58" y="128" class="b">transcripts</text>
-  <text x="58" y="145" class="s">~/.claude/projects</text>
-  <path class="line" d="M198,132 L220,132" marker-end="url(#m-grey)"/>
-  <rect class="blue" x="222" y="110" width="174" height="44" rx="8"/>
-  <text x="232" y="128" class="b">collector + guard</text>
-  <text x="232" y="145" class="s">numbers, slugs, hashes</text>
-  <path class="line-blue" d="M412,132 C440,132 440,176 468,176" marker-end="url(#m-blue)"/>
-  <rect class="card" x="32" y="180" width="380" height="100" rx="10"/>
-  <text x="48" y="204" class="b">Machine B, account: work</text>
-  <rect class="purple" x="320" y="190" width="76" height="22" rx="11"/>
-  <text x="358" y="205" class="s" text-anchor="middle">ccusage</text>
-  <rect class="card" x="48" y="222" width="150" height="44" rx="8"/>
-  <text x="58" y="240" class="b">transcripts</text>
-  <text x="58" y="257" class="s">~/.claude/projects</text>
-  <path class="line" d="M198,244 L220,244" marker-end="url(#m-grey)"/>
-  <rect class="blue" x="222" y="222" width="174" height="44" rx="8"/>
-  <text x="232" y="240" class="b">collector + guard</text>
-  <text x="232" y="257" class="s">numbers, slugs, hashes</text>
-  <path class="line-blue" d="M412,244 C440,244 440,230 468,230" marker-end="url(#m-blue)"/>
-  <rect class="card" x="32" y="292" width="380" height="100" rx="10"/>
-  <text x="48" y="316" class="b">Machine C, account: personal</text>
-  <rect class="purple" x="320" y="302" width="76" height="22" rx="11"/>
-  <text x="358" y="317" class="s" text-anchor="middle">ccusage</text>
-  <rect class="card" x="48" y="334" width="150" height="44" rx="8"/>
-  <text x="58" y="352" class="b">transcripts</text>
-  <text x="58" y="369" class="s">~/.claude/projects</text>
-  <path class="line" d="M198,356 L220,356" marker-end="url(#m-grey)"/>
-  <rect class="blue" x="222" y="334" width="174" height="44" rx="8"/>
-  <text x="232" y="352" class="b">collector + guard</text>
-  <text x="232" y="369" class="s">numbers, slugs, hashes</text>
-  <path class="line-blue" d="M412,356 C440,356 440,284 468,284" marker-end="url(#m-blue)"/>
-  <rect class="card" x="470" y="120" width="214" height="220" rx="10"/>
-  <text x="486" y="148" class="h">Private data store</text>
-  <text x="486" y="168" class="s">git repo or folder</text>
-  <rect class="blue" x="486" y="180" width="182" height="38" rx="8"/>
-  <text x="496" y="203" class="s">work/  usage rows (CSV)</text>
-  <rect class="blue" x="486" y="234" width="182" height="38" rx="8"/>
-  <text x="496" y="257" class="s">personal/  usage rows</text>
-  <rect class="purple" x="486" y="288" width="182" height="38" rx="8"/>
-  <text x="496" y="311" class="s">checks/  ccusage totals</text>
-  <path class="line" d="M684,230 L738,230" marker-end="url(#m-grey)"/>
-  <text x="711" y="222" class="s" text-anchor="middle">pull</text>
-  <rect class="card" x="740" y="120" width="188" height="220" rx="10"/>
-  <text x="756" y="148" class="h">Research machine</text>
-  <text x="756" y="168" class="s">a clone of the store</text>
-  <rect class="card" x="756" y="180" width="156" height="44" rx="8"/>
-  <text x="766" y="198" class="b">analyze</text>
-  <text x="766" y="215" class="s">text breakdowns</text>
-  <rect class="card" x="756" y="234" width="156" height="44" rx="8"/>
-  <text x="766" y="252" class="b">report</text>
-  <text x="766" y="269" class="s">static HTML page</text>
-  <rect class="card" x="756" y="288" width="156" height="44" rx="8"/>
-  <text x="766" y="306" class="b">compare</text>
-  <text x="766" y="323" class="s">rows vs ccusage</text>
-  <rect class="orange" x="32" y="416" width="896" height="40" rx="10"/>
-  <text x="48" y="441" class="s">Prompts, replies, code, paths, titles and branch names never leave the machine they were written on.</text>
+  <rect class="card" x="48" y="106" width="140" height="134" rx="8"/>
+  <text x="58" y="164" class="b">transcripts</text>
+  <text x="58" y="182" class="s">~/.claude/projects</text>
+  <path class="line" d="M188,127 L204,127" marker-end="url(#m-grey)"/>
+  <rect class="blue" x="206" y="106" width="150" height="42" rx="8"/>
+  <text x="216" y="124" class="b">usage rows</text>
+  <text x="216" y="140" class="s">one per message</text>
+  <path class="line" d="M356,127 L370,127" marker-end="url(#m-grey)"/>
+  <path class="line" d="M188,173 L204,173" marker-end="url(#m-grey)"/>
+  <rect class="green" x="206" y="152" width="150" height="42" rx="8"/>
+  <text x="216" y="170" class="b">context sizes</text>
+  <text x="216" y="186" class="s">lengths and counts</text>
+  <path class="line" d="M356,173 L370,173" marker-end="url(#m-grey)"/>
+  <path class="line" d="M188,219 L204,219" marker-end="url(#m-grey)"/>
+  <rect class="purple" x="206" y="198" width="150" height="42" rx="8"/>
+  <text x="216" y="216" class="b">ccusage weekly</text>
+  <text x="216" y="232" class="s">daily totals</text>
+  <path class="line" d="M356,219 L370,219" marker-end="url(#m-grey)"/>
+  <rect class="green" x="372" y="106" width="64" height="134" rx="8"/>
+  <text x="404" y="166" class="b" text-anchor="middle">guard</text>
+  <text x="404" y="186" class="s" text-anchor="middle">fail</text>
+  <text x="404" y="202" class="s" text-anchor="middle">closed</text>
+  <rect class="card" x="32" y="268" width="420" height="72" rx="10"/>
+  <text x="48" y="292" class="b">Machine B, account: work</text>
+  <rect class="blue" x="48" y="304" width="64" height="22" rx="11"/>
+  <text x="80" y="319" class="s" text-anchor="middle">usage</text>
+  <rect class="green" x="120" y="304" width="72" height="22" rx="11"/>
+  <text x="156" y="319" class="s" text-anchor="middle">context</text>
+  <rect class="purple" x="200" y="304" width="76" height="22" rx="11"/>
+  <text x="238" y="319" class="s" text-anchor="middle">ccusage</text>
+  <rect class="green" x="284" y="304" width="64" height="22" rx="11"/>
+  <text x="316" y="319" class="s" text-anchor="middle">guard</text>
+  <rect class="card" x="32" y="352" width="420" height="72" rx="10"/>
+  <text x="48" y="376" class="b">Machine C, account: personal</text>
+  <rect class="blue" x="48" y="388" width="64" height="22" rx="11"/>
+  <text x="80" y="403" class="s" text-anchor="middle">usage</text>
+  <rect class="green" x="120" y="388" width="72" height="22" rx="11"/>
+  <text x="156" y="403" class="s" text-anchor="middle">context</text>
+  <rect class="purple" x="200" y="388" width="76" height="22" rx="11"/>
+  <text x="238" y="403" class="s" text-anchor="middle">ccusage</text>
+  <rect class="green" x="284" y="388" width="64" height="22" rx="11"/>
+  <text x="316" y="403" class="s" text-anchor="middle">guard</text>
+  <path class="line-blue" d="M436,173 C458,173 458,200 476,200" marker-end="url(#m-blue)"/>
+  <path class="line-blue" d="M452,304 C466,304 466,250 476,250" marker-end="url(#m-blue)"/>
+  <path class="line-blue" d="M452,388 C470,388 470,296 476,296" marker-end="url(#m-blue)"/>
+  <rect class="card" x="478" y="96" width="250" height="236" rx="10"/>
+  <text x="494" y="124" class="h">Private data store</text>
+  <text x="494" y="144" class="s">git repo or folder, per account</text>
+  <rect class="blue" x="494" y="160" width="218" height="32" rx="8"/>
+  <text x="504" y="181" class="s">usage rows (.csv)</text>
+  <rect class="green" x="494" y="200" width="218" height="32" rx="8"/>
+  <text x="504" y="221" class="s">context sizes (.context.csv)</text>
+  <rect class="green" x="494" y="240" width="218" height="32" rx="8"/>
+  <text x="504" y="261" class="s">skill uses, catalog names</text>
+  <rect class="purple" x="494" y="280" width="218" height="32" rx="8"/>
+  <text x="504" y="301" class="s">checks/  ccusage totals</text>
+  <path class="line" d="M728,214 L758,214" marker-end="url(#m-grey)"/>
+  <text x="743" y="206" class="s" text-anchor="middle">pull</text>
+  <rect class="card" x="760" y="96" width="168" height="236" rx="10"/>
+  <text x="776" y="124" class="h">Research machine</text>
+  <text x="776" y="144" class="s">a clone of the store</text>
+  <rect class="card" x="776" y="160" width="136" height="46" rx="8"/>
+  <text x="786" y="179" class="b">analyze</text>
+  <text x="786" y="196" class="s">text breakdowns</text>
+  <rect class="card" x="776" y="216" width="136" height="46" rx="8"/>
+  <text x="786" y="235" class="b">report</text>
+  <text x="786" y="252" class="s">static HTML page</text>
+  <rect class="card" x="776" y="272" width="136" height="46" rx="8"/>
+  <text x="786" y="291" class="b">compare</text>
+  <text x="786" y="308" class="s">rows vs ccusage</text>
+  <rect class="orange" x="32" y="448" width="896" height="40" rx="10"/>
+  <text x="48" y="473" class="s">Prompts, replies, code, paths, titles, branch names and attached text never leave the machine they were written on.</text>
 </svg>

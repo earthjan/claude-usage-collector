@@ -21,15 +21,28 @@ THEME_LIGHT = {
     "bg": "#f6f6f4", "surface": "#fcfcfb", "border": "#e4e3de",
     "text": "#1b1b1a", "muted": "#52514e", "faint": "#8a8984",
     "grid": "#ecebe7", "series-1": "#2a78d6", "series-2": "#eb6834",
+    "series-3": "#1baf7a", "series-4": "#eda100", "series-5": "#e87ba4",
+    "series-6": "#008300", "series-7": "#6250d6", "rest": "#c9c8c2",
 }
 THEME_DARK = {
     "bg": "#121211", "surface": "#1a1a19", "border": "#2e2e2b",
     "text": "#f0efec", "muted": "#c3c2b7", "faint": "#8f8e86",
     "grid": "#272725", "series-1": "#3987e5", "series-2": "#d95926",
+    "series-3": "#199e70", "series-4": "#c98500", "series-5": "#d55181",
+    "series-6": "#008300", "series-7": "#9085e9", "rest": "#4a4a46",
 }
 CHART_CSS = """
-.bar.main, .swatch.main { fill: var(--series-1); }
-.bar.sub, .swatch.sub { fill: var(--series-2); }
+.bar.main, .swatch.main, .dot.main { fill: var(--series-1); }
+.bar.sub, .swatch.sub, .dot.sub { fill: var(--series-2); }
+.seg-1 { fill: var(--series-1); } .seg-2 { fill: var(--series-2); }
+.seg-3 { fill: var(--series-3); } .seg-4 { fill: var(--series-4); }
+.seg-5 { fill: var(--series-5); } .seg-6 { fill: var(--series-6); }
+.seg-7 { fill: var(--series-7); } .seg-rest { fill: var(--rest); }
+.line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.line.main { stroke: var(--series-1); }
+.line.sub { stroke: var(--series-2); }
+.dot { stroke: var(--surface); stroke-width: 2; }
+.hit { fill: transparent; }
 .gridline { stroke: var(--grid); stroke-width: 1; }
 .baseline { stroke: var(--faint); stroke-width: 1; }
 .tick { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
@@ -277,6 +290,160 @@ class BandChart:
         return "".join(parts)
 
 
+COMPOSITION_GROUPS = (
+    ("1", "System prompt", ("system_prompt",)),
+    ("2", "Instructions", ("instr_user", "instr_project", "instr_local", "instr_other")),
+    ("3", "Memory", ("instr_memory",)),
+    ("4", "Skill listing", ("skill_listing",)),
+    ("5", "Agent listing", ("agent_listing",)),
+    ("6", "Tools and MCP", ("deferred_tools", "mcp")),
+    ("7", "Hook context", ("hook_context",)),
+    ("rest", "Rest of first turn", ("rest",)),
+)
+THREAD_LABELS = (("main", "Main thread"), ("sub", "Subagents"))
+
+
+def grouped_composition(parts: list) -> list:
+    """[(css, label, tokens)] for each composition group, from [(part, tokens)]."""
+    values = dict(parts)
+    return [(css, label, sum(values.get(key, 0) for key in keys))
+            for css, label, keys in COMPOSITION_GROUPS]
+
+
+class CompositionChart:
+    """One stacked horizontal bar per thread: the average start, split by part."""
+
+    WIDTH = 960
+    LABEL_W, VALUE_W, BAR_H, ROW_H, GAP = 96, 64, 22, 40, 2
+    LEGEND_ROW, CHAR_W, SWATCH_GAP, ITEM_GAP = 20, 6.6, 16, 22
+
+    def __init__(self, composition: dict):
+        self.rows = [(name, grouped_composition(composition[key]))
+                     for key, name in THREAD_LABELS]
+        self.peak = max(sum(v for _c, _l, v in groups) for _n, groups in self.rows) or 1
+        self.legend, self.top = self._legend_layout()
+
+    def svg(self) -> str:
+        height = self.top + self.ROW_H * len(self.rows)
+        parts = [_svg_open(self.WIDTH, height, "Average starting context by part, "
+                           "main thread and subagents", False)]
+        parts.extend(self.legend)
+        parts.extend(self._row(i, row) for i, row in enumerate(self.rows))
+        parts.append("</svg>")
+        return "".join(parts)
+
+    def _legend_layout(self) -> tuple:
+        items, x, y = [], 0.0, 16
+        for css, label, _keys in COMPOSITION_GROUPS:
+            width = self.SWATCH_GAP + len(label) * self.CHAR_W
+            if x and x + width > self.WIDTH:
+                x, y = 0.0, y + self.LEGEND_ROW
+            items.append('<rect class="seg-%s" x="%s" y="%d" width="10" height="10" rx="2"/>'
+                         '<text class="legend-text" x="%s" y="%d">%s</text>'
+                         % (css, _num(x), y - 9, _num(x + self.SWATCH_GAP), y, label))
+            x += width + self.ITEM_GAP
+        return items, y + 18
+
+    def _row(self, index: int, row: tuple) -> str:
+        name, groups = row
+        y = self.top + index * self.ROW_H
+        total = sum(value for _c, _l, value in groups)
+        parts = ['<text class="label" x="0" y="%s">%s</text>'
+                 % (_num(y + self.BAR_H / 2 + 4), name)]
+        parts.extend(self._segments(name, y, groups, total))
+        end = self.LABEL_W + total / self.peak * self._span()
+        parts.append('<text class="value" x="%s" y="%s">%s</text>'
+                     % (_num(end + 8), _num(y + self.BAR_H / 2 + 4), fmt.tokens(total)))
+        return "<g>%s</g>" % "".join(parts)
+
+    def _span(self) -> float:
+        return self.WIDTH - self.LABEL_W - self.VALUE_W
+
+    def _segments(self, name: str, y: float, groups: list, total: int) -> list:
+        shown = [group for group in groups if group[2]]
+        x, segments = float(self.LABEL_W), []
+        for index, (css, label, value) in enumerate(shown):
+            width = value / self.peak * self._span()
+            last = index == len(shown) - 1
+            drawn = width if last else max(width - self.GAP, 0.5)
+            tip = "%s, %s: about %s tokens (%s)" % (
+                name, label, fmt.tokens(value), fmt.percent(value, total))
+            shape = (_right_rounded_bar("seg seg-" + css, x, y, drawn, self.BAR_H)
+                     if last else
+                     '<rect class="seg seg-%s" x="%s" y="%s" width="%s" height="%s"/>'
+                     % (css, _num(x), _num(y), _num(drawn), _num(self.BAR_H)))
+            segments.append("<g><title>%s</title>%s</g>" % (escape(tip), shape))
+            x += width
+        return segments
+
+
+class TrendChart:
+    """Median starting context per ISO week, one line per thread kind."""
+
+    WIDTH, HEIGHT = 460, 240
+    LEFT, RIGHT, TOP, BOTTOM = 48, 16, 34, 28
+
+    def __init__(self, weeks: list):
+        self.weeks = weeks
+        peak = max([w[key] or 0 for w in weeks for key in ("main", "sub")] or [0])
+        self.ticks = axis_ticks(peak or 1)
+        self.plot_w = self.WIDTH - self.LEFT - self.RIGHT
+        self.plot_h = self.HEIGHT - self.TOP - self.BOTTOM
+        self.step = self.plot_w / max(len(weeks), 1)
+
+    def svg(self) -> str:
+        parts = [_svg_open(self.WIDTH, self.HEIGHT, "Median starting context by ISO week, "
+                           "main thread and subagents", False), _legend(self.LEFT, 16)]
+        parts.extend(self._grid())
+        for key in ("main", "sub"):
+            parts.append(self._line(key))
+        parts.extend(self._week(i, week) for i, week in enumerate(self.weeks))
+        parts.append("</svg>")
+        return "".join(parts)
+
+    def _x(self, index: int) -> float:
+        return self.LEFT + (index + 0.5) * self.step
+
+    def _y(self, value: float) -> float:
+        return self.TOP + self.plot_h - value / self.ticks[-1] * self.plot_h
+
+    def _grid(self) -> list:
+        lines = []
+        for tick in self.ticks:
+            y = self._y(tick)
+            lines.append('<line class="%s" x1="%d" x2="%d" y1="%s" y2="%s"/>'
+                         % ("baseline" if tick == 0 else "gridline", self.LEFT,
+                            self.WIDTH - self.RIGHT, _num(y), _num(y)))
+            lines.append('<text class="tick" x="%d" y="%s" text-anchor="end">%s</text>'
+                         % (self.LEFT - 8, _num(y + 4), fmt.tokens(tick)))
+        return lines
+
+    def _line(self, key: str) -> str:
+        path, pen = [], "M"
+        for index, week in enumerate(self.weeks):
+            if week[key] is None:
+                pen = "M"
+                continue
+            path.append("%s%s %s" % (pen, _num(self._x(index)), _num(self._y(week[key]))))
+            pen = "L"
+        return '<path class="line %s" d="%s"/>' % (key, "".join(path)) if path else ""
+
+    def _week(self, index: int, week: dict) -> str:
+        x = self._x(index)
+        tip = "%s: main thread %s, subagents %s" % (
+            week["week"], fmt.average(week["main"]), fmt.average(week["sub"]))
+        parts = ["<g><title>%s</title>" % escape(tip),
+                 '<rect class="hit" x="%s" y="%d" width="%s" height="%d"/>'
+                 % (_num(x - self.step / 2), self.TOP, _num(self.step), self.plot_h)]
+        for key in ("main", "sub"):
+            if week[key] is not None:
+                parts.append('<circle class="dot %s" cx="%s" cy="%s" r="4"/>'
+                             % (key, _num(x), _num(self._y(week[key]))))
+        parts.append('<text class="tick" x="%s" y="%d" text-anchor="middle">%s</text></g>'
+                     % (_num(x), self.HEIGHT - 8, escape(week["week"][5:])))
+        return "".join(parts)
+
+
 PAGE_CSS = """
 :root { color-scheme: light dark; }
 * { box-sizing: border-box; }
@@ -321,6 +488,13 @@ code { font: 12px %(mono)s; color: var(--muted); }
   gap: 12px; }
 .stat .v { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .stat .k { color: var(--muted); font-size: 13px; }
+.split { margin-top: 18px; }
+.key { display: inline-block; width: 10px; height: 10px; margin-right: 8px;
+  border-radius: 2px; vertical-align: -1px; }
+.key.seg-1 { background: var(--series-1); } .key.seg-2 { background: var(--series-2); }
+.key.seg-3 { background: var(--series-3); } .key.seg-4 { background: var(--series-4); }
+.key.seg-5 { background: var(--series-5); } .key.seg-6 { background: var(--series-6); }
+.key.seg-7 { background: var(--series-7); } .key.seg-rest { background: var(--rest); }
 footer { margin-top: 24px; color: var(--faint); font-size: 12px; }
 @media (max-width: 520px) { .grid2 { grid-template-columns: 1fr; } h1 { font-size: 24px; } }
 """ % {"font": FONT_STACK, "mono": MONO_STACK}
@@ -345,8 +519,13 @@ class HtmlReport:
         )
 
     def _sections(self) -> list:
-        return [self._kpis(), self._daily(), self._breakdowns(), self._bands(),
-                self._agents(), self._sessions(), self._shape()]
+        sections = [self._kpis(), self._daily(), self._breakdowns(), self._bands(),
+                    self._agents(), self._sessions(), self._shape()]
+        if self.s["starting_context"]["starts"]:
+            sections += [self._starting(), self._composition(), self._trend_and_skills()]
+        if self.s["skills_agents"]["unused"]:
+            sections.append(self._unused())
+        return sections
 
     def _header(self) -> str:
         if not self.s["turns"]:
@@ -460,6 +639,61 @@ class HtmlReport:
                         % (escape(v), k) for v, k in stats)
         return self._card("Subagent shape", "How big and how long subagents ran.",
                           inner, "stats")
+
+    def _starting(self) -> str:
+        start = self.s["starting_context"]
+        threads = start["threads"]
+        stats = []
+        for key, name in THREAD_LABELS:
+            stats += [(fmt.average(threads[key]["median"]), "%s median" % name.lower()),
+                      (fmt.average(threads[key]["p90"]), "%s p90" % name.lower())]
+        compactions = start["compactions"]
+        stats.append((str(compactions["main"] + compactions["sub"]), "compactions"))
+        forks = start["forks"]
+        stats.append((str(forks["main"] + forks["sub"]), "forked or continued"))
+        inner = "".join('<div class="stat"><div class="v">%s</div><div class="k">%s</div></div>'
+                        % (escape(v), k) for v, k in stats)
+        return self._card("Starting context",
+                          "Tokens in the first turn of each session and subagent, "
+                          "from %d start events. Forked or continued ones start with "
+                          "copied history and are only counted." % start["starts"],
+                          inner, "stats")
+
+    def _composition(self) -> str:
+        composition = self.s["starting_context"]["composition"]
+        groups = {key: grouped_composition(composition[key]) for key, _n in THREAD_LABELS}
+        header = [("Part", False), ("Main thread", True), ("Subagents", True)]
+        rows = [['<span class="key seg-%s"></span>%s' % (css, label),
+                 fmt.tokens(main), fmt.tokens(sub)]
+                for (css, label, main), (_c, _l, sub) in zip(groups["main"], groups["sub"])]
+        return ('<section class="card"><h2>What a thread starts with</h2>'
+                '<p class="sub">Average start event, estimated tokens (characters / 4). '
+                'Rest of first turn is everything else the first turn carried, '
+                'such as tool definitions and the first prompt.</p>'
+                '<div class="chart wide">%s</div><div class="table split">%s</div></section>'
+                % (CompositionChart(composition).svg(), self._table(header, rows)))
+
+    def _trend_and_skills(self) -> str:
+        top = self.s["skills_agents"]["top_skills"]
+        skills = [(e["name"], e["uses"], "%s: %d uses" % (e["name"], e["uses"]))
+                  for e in top]
+        trend = self._card("Median starting context by week",
+                           "ISO weeks, UTC.", TrendChart(
+                               self.s["starting_context"]["weeks"]).svg())
+        if not skills:
+            return trend
+        return '<div class="grid2">%s%s</div>' % (trend, self._card(
+            "Top skills", "Uses: first time a session or subagent invoked a skill.",
+            BarList("Top skills by uses", skills).svg()))
+
+    def _unused(self) -> str:
+        header = [("Name", False), ("Kind", False), ("Days listed", True)]
+        rows = [["<code>%s</code>" % escape(e["name"]), escape(e["kind"]), str(e["days"])]
+                for e in self.s["skills_agents"]["unused"]]
+        return self._card("Listed but never used",
+                          "Skills no one invoked and agent types no one spawned, "
+                          "though a listing offered them in this period.",
+                          self._table(header, rows), "table")
 
     def _footer(self) -> str:
         w = self.s["weights"]

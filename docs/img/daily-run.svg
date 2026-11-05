@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="268" viewBox="0 0 960 268" role="img" aria-labelledby="title desc">
   <title id="title">Daily run pipeline</title>
-  <desc id="desc">claude-usage run reads new transcript lines, extracts allowlisted fields, guards every column, writes day files, then pushes. A guard failure writes nothing.</desc>
+  <desc id="desc">claude-usage run reads new transcript lines, extracts usage rows and context sizes from allowlisted fields, guards every column of every file, writes day files, runs the weekly ccusage cross-check, then pushes. A guard failure writes nothing.</desc>
   <style>
     .bg { fill: #f6f8fa; }
     .card { fill: #ffffff; stroke: #d0d7de; stroke-width: 1; }
@@ -66,20 +66,20 @@
   <text x="50" y="90" class="num" text-anchor="middle">1</text>
   <text x="70" y="91" class="h">Read</text>
   <text x="40" y="124" class="s">new lines only</text>
-  <text x="40" y="144" class="s">from saved offsets</text>
+  <text x="40" y="144" class="s">offsets per stream</text>
   <path class="line" d="M184,115 L210,115" marker-end="url(#m-grey)"/>
   <rect class="card" x="212" y="60" width="160" height="110" rx="10"/>
   <circle class="dot-blue" cx="238" cy="86" r="11"/>
   <text x="238" y="90" class="num" text-anchor="middle">2</text>
   <text x="258" y="91" class="h">Extract</text>
-  <text x="228" y="124" class="s">allowlisted fields</text>
-  <text x="228" y="144" class="s">ids salted, hashed</text>
+  <text x="228" y="124" class="s">usage rows, context</text>
+  <text x="228" y="144" class="s">sizes, skills, names</text>
   <path class="line" d="M372,115 L398,115" marker-end="url(#m-grey)"/>
   <rect class="green" x="400" y="60" width="160" height="110" rx="10"/>
   <circle class="dot-blue" cx="426" cy="86" r="11"/>
   <text x="426" y="90" class="num" text-anchor="middle">3</text>
   <text x="446" y="91" class="h">Guard</text>
-  <text x="416" y="124" class="s">checks each column</text>
+  <text x="416" y="124" class="s">one schema per file</text>
   <text x="416" y="144" class="s">any fail: stop</text>
   <path class="line" d="M560,115 L586,115" marker-end="url(#m-grey)"/>
   <rect class="card" x="588" y="60" width="160" height="110" rx="10"/>
@@ -97,8 +97,8 @@
   <text x="792" y="144" class="s">push (git store)</text>
   <path class="line-red" d="M480,170 L480,206" marker-end="url(#m-red)"/>
   <rect class="red" x="236" y="208" width="420" height="40" rx="10"/>
-  <text x="250" y="233" class="s">Guard fails: nothing written, exit 1, offsets kept</text>
+  <text x="250" y="233" class="s">Guard fails: no file written, exit 1, offsets kept</text>
   <path class="line-purple" d="M856,206 L856,172" marker-end="url(#m-purple)"/>
   <rect class="purple" x="676" y="208" width="260" height="40" rx="10"/>
-  <text x="690" y="233" class="s">Once a month: ccusage cross-check</text>
+  <text x="690" y="233" class="s">Once a week: ccusage cross-check</text>
 </svg>

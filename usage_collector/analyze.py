@@ -2,13 +2,15 @@
 import sys
 from collections import Counter
 
+from . import context_analysis
 from . import formatting as fmt
 from .config import DEFAULTS, TOKEN_KEYS, is_token_number_map
-from .store import RowReader, StoreError, resolve_store
+from .store import RowReader, StoreError, StreamReader, resolve_store
 
 CONTEXT_BANDS = (
     ("<50K", 50_000), ("50-150K", 150_000), ("150-300K", 300_000), ("300K+", None),
 )
+STREAMS = ("context", "skills", "catalog")
 MAIN_TYPE = "(main)"
 TOP_AGENTS = 15
 TOP_SESSIONS = 10
@@ -204,22 +206,41 @@ def _band(context: int) -> str:
     return CONTEXT_BANDS[-1][0]
 
 
-def summarize(rows, meter: Meter) -> dict:
+def summarize(rows, meter: Meter, streams=None) -> dict:
+    """Summarizes usage rows, plus the context, skills and catalog rows when given."""
+    streams = streams or {}
     summary = Summary(meter)
     for row in rows:
         summary.add(row)
     result = summary.result()
     result["first_day"] = rows[0]["ts"][:10] if rows else None
     result["last_day"] = rows[-1]["ts"][:10] if rows else None
+    result["starting_context"] = context_analysis.starting_context(
+        streams.get("context", []))
+    result["skills_agents"] = context_analysis.skills_and_agents(
+        streams.get("skills", []), streams.get("catalog", []), rows)
     return result
+
+
+def load_streams(store: str, since=None, account=None) -> tuple:
+    """Returns ({stream: rows} for the context, skills and catalog streams, skipped count)."""
+    streams, skipped = {}, 0
+    for stream in STREAMS:
+        reader = StreamReader(store, stream, since=since, account=account)
+        streams[stream] = reader.read()
+        skipped += reader.skipped
+    return streams, skipped
 
 
 def build(args, config):
     """Loads and summarizes a store; returns (summary, skipped row count)."""
     store = resolve_store(args.store, config)
-    reader = RowReader(store, since=args.since, account=getattr(args, "account", None))
+    account = getattr(args, "account", None)
+    reader = RowReader(store, since=args.since, account=account)
     rows = reader.read()
-    return summarize(rows, Meter.from_config(config)), reader.skipped
+    streams, skipped = load_streams(store, since=args.since, account=account)
+    summary = summarize(rows, Meter.from_config(config), streams)
+    return summary, reader.skipped + skipped
 
 
 def cmd_analyze(args, config) -> int:
@@ -239,6 +260,9 @@ def render_text(summary: dict, skipped: int = 0) -> str:
     return "\n".join(lines) + "\n"
 
 
+THREAD_NAMES = (("main thread", "main"), ("subagents", "sub"))
+
+
 class TextReport:
     def __init__(self, summary: dict):
         self.s = summary
@@ -248,7 +272,8 @@ class TextReport:
         if not self.s["turns"]:
             return ["no rows found for this selection"]
         for section in (self._totals, self._threads, self._models, self._types,
-                        self._bands, self._agents, self._sessions, self._shape):
+                        self._bands, self._agents, self._sessions, self._shape,
+                        self._starting, self._skills):
             section()
             self.out.append("")
         return self.out
@@ -331,3 +356,52 @@ class TextReport:
             shares["peak_over_200k"], shares["agents"]))
         self.out.append("  10 turns or fewer: %s" % fmt.percent(
             shares["short"], shares["agents"]))
+
+    def _starting(self) -> None:
+        start = self.s["starting_context"]
+        self._heading("Starting context")
+        if not start["starts"]:
+            self.out.append("  no context events collected yet")
+            return
+        threads = start["threads"]
+        self._table(("thread", "starts", "median", "p90"), [
+            (name, threads[key]["count"], fmt.average(threads[key]["median"]),
+             fmt.average(threads[key]["p90"])) for name, key in THREAD_NAMES])
+        compactions = start["compactions"]
+        self.out.append("  compactions: main thread %d, subagents %d"
+                        % (compactions["main"], compactions["sub"]))
+        forks = start["forks"]
+        self.out.append("  forked or continued: main thread %d, subagents %d"
+                        " (left out of the figures above)" % (forks["main"], forks["sub"]))
+        self._composition(start["composition"])
+        self._weeks(start["weeks"])
+
+    def _composition(self, composition: dict) -> None:
+        self.out += ["", "  Average start, estimated tokens (chars / 4)"]
+        main, sub = dict(composition["main"]), dict(composition["sub"])
+        self._table(("part", "main thread", "subagents"), [
+            (label, fmt.tokens(main[key]), fmt.tokens(sub[key]))
+            for key, label in context_analysis.PARTS])
+
+    def _weeks(self, weeks: list) -> None:
+        self.out += ["", "  Median starting context by ISO week"]
+        self._table(("week", "main thread", "subagents"), [
+            (w["week"], fmt.average(w["main"]), fmt.average(w["sub"])) for w in weeks])
+
+    def _skills(self) -> None:
+        found = self.s["skills_agents"]
+        self._heading("Skills and agents")
+        if not (found["top_skills"] or any(found["listed"].values())):
+            self.out.append("  no skill or catalog rows collected yet")
+            return
+        self.out.append("  listed: %d skill(s), %d agent type(s)"
+                        % (found["listed"]["skill"], found["listed"]["agent"]))
+        self.out += ["", "  Top skills by uses"]
+        self._table(("skill", "uses"), [(e["name"], e["uses"])
+                                        for e in found["top_skills"]])
+        self.out += ["", "  Listed but never used"]
+        if not found["unused"]:
+            self.out.append("  none")
+            return
+        self._table(("name", "kind", "days listed"), [
+            (e["name"], e["kind"], e["days"]) for e in found["unused"]])

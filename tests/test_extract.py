@@ -123,6 +123,21 @@ class SelectionTest(ExtractTestCase):
         self.assertEqual(fork_rows[0]["agent_type"], "fork")
         self.assertEqual(fork_rows[0]["tools"], "Edit")
 
+    def test_a_zero_count_copy_read_first_gives_the_row_to_the_real_turn(self):
+        real = json.loads(support.B2_LINE.replace("msg_B2", "msg_SHARED"))
+        zero = json.loads(json.dumps(real))
+        zero["message"]["usage"] = {"input_tokens": 0, "output_tokens": 0}
+        later = "44444444-4444-4444-8444-444444444444"
+        for project, session, record in ((ALPHA, S0, zero), (BETA, later, real)):
+            path = os.path.join(self.root, project, session + ".jsonl")
+            with open(path, "w") as handle:
+                handle.write(json.dumps(record) + "\n")
+            support.mark_idle(path)
+        rows = [row for row in self.collect() if row["ts"] == "2026-03-05T08:20:00Z"]
+        self.assertEqual(
+            [(row["project"], row["session"], row["context"], row["output"]) for row in rows],
+            [(h(BETA), h(later), "21", "9")])
+
     def test_tools_merged_sorted_and_web_counts_kept(self):
         row = self.by_ts(self.collect())["2026-03-01T10:01:00Z"]
         self.assertEqual(row["tools"], "Bash;Read")
@@ -184,6 +199,14 @@ class SettingsTest(ExtractTestCase):
     def test_hash_agent_types(self):
         row = self.collect(hash_agent_types=True)[7]
         self.assertEqual(row["agent_type"], h("Explore"))
+
+    def test_hash_names_hashes_agent_types_and_tools(self):
+        for flag in ("hash_names", "hash_agent_types"):
+            with self.subTest(flag=flag):
+                self.state = State({})
+                row = self.collect(**{flag: True})[7]
+                self.assertEqual((row["agent_type"], row["tools"]),
+                                 (h("Explore"), h("Grep")))
 
     def test_machine_label_replaces_hostname_hash(self):
         rows = self.collect(machine_label="laptop-1")

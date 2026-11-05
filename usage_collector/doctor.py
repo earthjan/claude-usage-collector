@@ -7,10 +7,22 @@ import subprocess
 import sys
 
 from . import config as config_module
+from . import periods
 from .hashing import SaltError, load_salt
 
 LAUNCHD_LABEL = "io.github.claude-usage-collector"
-MIN_CLEANUP_DAYS = 90
+CLAUDE_CODE_CLEANUP_DAYS = 30
+# A monthly check run early in a month reads the whole previous month.
+MONTH_CLEANUP_DAYS = 62
+SETTINGS = "~/.claude/settings.json"
+UNSET = object()
+
+
+def min_cleanup_days(period: str) -> int:
+    """Retention that keeps every day a catch-up check can still read."""
+    if period == "month":
+        return MONTH_CLEANUP_DAYS
+    return periods.MAX_AGE_DAYS + 1
 
 
 class Doctor:
@@ -31,7 +43,7 @@ class Doctor:
         self._check_destination(config["destination"])
         self._check_launchd()
         self._check_ccusage(config["crosscheck"])
-        self._check_retention()
+        self._check_retention(config["crosscheck"].get("period", "week"))
         return self.results
 
     def _add(self, level: str, name: str, detail: str) -> None:
@@ -107,18 +119,27 @@ class Doctor:
         elif self._which(crosscheck.get("command", "ccusage")):
             self._add("OK", "ccusage", "found on PATH")
         else:
-            self._add("WARN", "ccusage", "not on PATH, monthly cross-check will be skipped")
+            self._add("WARN", "ccusage", "not on PATH, the cross-check will be skipped")
 
-    def _check_retention(self) -> None:
-        days = _cleanup_period_days(self._expand("~/.claude/settings.json"))
-        if isinstance(days, int) and days >= MIN_CLEANUP_DAYS:
-            self._add("OK", "cleanupPeriodDays", "%d days" % days)
-            return
-        self._add(
-            "WARN", "cleanupPeriodDays",
-            "unset or below %d in ~/.claude/settings.json, older transcripts "
-            "are deleted before they can be collected" % MIN_CLEANUP_DAYS,
-        )
+    def _check_retention(self, period: str) -> None:
+        days = _cleanup_period_days(self._expand(SETTINGS))
+        check = "%sly cross-check" % period
+        needed = min_cleanup_days(period)
+        if days is None:
+            self._add("WARN", "cleanupPeriodDays", "could not read it from %s, it must be "
+                      "a whole number of days, %d or more for the %s" % (SETTINGS, needed, check))
+        elif days is UNSET:
+            self._retention_level(CLAUDE_CODE_CLEANUP_DAYS, needed, "unset, Claude Code "
+                                  "keeps %d days" % CLAUDE_CODE_CLEANUP_DAYS, check)
+        else:
+            self._retention_level(days, needed, "%d days" % days, check)
+
+    def _retention_level(self, days: int, needed: int, kept: str, check: str) -> None:
+        if days >= needed:
+            self._add("OK", "cleanupPeriodDays", "%s, enough for the %s" % (kept, check))
+        else:
+            self._add("WARN", "cleanupPeriodDays", "%s, below %d, transcripts may be "
+                      "deleted before the %s reads them" % (kept, needed, check))
 
     def _which(self, command: str):
         return shutil.which(command, path=self.environ.get("PATH"))
@@ -134,12 +155,17 @@ class Doctor:
 
 
 def _cleanup_period_days(path: str):
+    """The setting in days, UNSET when absent, or None when it cannot be read."""
     try:
         with open(path) as handle:
             settings = json.load(handle)
+    except FileNotFoundError:
+        return UNSET
     except (OSError, ValueError):
         return None
     if not isinstance(settings, dict):
         return None
-    days = settings.get("cleanupPeriodDays")
+    if "cleanupPeriodDays" not in settings:
+        return UNSET
+    days = settings["cleanupPeriodDays"]
     return days if isinstance(days, int) and not isinstance(days, bool) else None

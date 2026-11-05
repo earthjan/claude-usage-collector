@@ -8,7 +8,7 @@ from datetime import date
 from usage_collector import guard, sinks
 
 from tests import support
-from tests.test_guard import valid_row
+from tests.test_guard import catalog_row, context_row, skill_row, valid_row
 
 TODAY = date(2026, 3, 10)
 TOTALS = {"2026-03-01": {"claude-opus-5-5": {
@@ -67,6 +67,13 @@ class FolderSinkTest(unittest.TestCase):
         with self.assertRaises(sinks.GuardError):
             self.sink.write_check("2026-03", TOTALS, "../x")
 
+    def test_write_check_takes_a_week_and_rejects_other_names(self):
+        path = self.sink.write_check("2026-W09", TOTALS, "laptop-1")
+        self.assertEqual(path, os.path.join(self.store, "checks/work/laptop-1/2026-W09.json"))
+        for bad in ("2026-W99", "2026-13", "../2026-03"):
+            with self.subTest(bad=bad), self.assertRaises(sinks.GuardError):
+                self.sink.write_check(bad, TOTALS, "laptop-1")
+
     def test_failed_write_leaves_no_rows_so_a_retry_writes_each_once(self):
         rows = [valid_row(ts="2026-03-01T10:00:00Z"), valid_row(ts="2026-03-02T10:00:00Z")]
         blocker = os.path.join(self.store, "work/2026/03/2026-03-02.csv")
@@ -79,6 +86,36 @@ class FolderSinkTest(unittest.TestCase):
         for day in ("01", "02"):
             lines = read_csv(os.path.join(self.store, "work/2026/03/2026-03-%s.csv" % day))
             self.assertEqual([line[0] for line in lines[1:]], ["2026-03-%sT10:00:00Z" % day])
+
+    def test_each_stream_gets_its_own_day_file_and_header(self):
+        written = self.sink.write_streams({
+            "usage": [valid_row(ts="2026-03-01T10:00:00Z")],
+            "context": [context_row(ts="2026-03-01T10:00:00Z")],
+            "skills": [skill_row(ts="2026-03-02T09:00:00Z")],
+            "catalog": [catalog_row(date="2026-03-01"),
+                        catalog_row(date="2026-03-01", kind="agent", name="Explore")],
+        })
+        day = os.path.join(self.store, "work/2026/03")
+        self.assertEqual(sorted(os.path.relpath(path, day) for path in written), [
+            "2026-03-01.catalog.csv", "2026-03-01.context.csv",
+            "2026-03-01.csv", "2026-03-02.skills.csv",
+        ])
+        catalog = read_csv(os.path.join(day, "2026-03-01.catalog.csv"))
+        self.assertEqual(catalog[0], list(guard.CATALOG_COLUMNS))
+        self.assertEqual([line[3:] for line in catalog[1:]],
+                         [["skill", "plugin-x:review"], ["agent", "Explore"]])
+        context = read_csv(os.path.join(day, "2026-03-01.context.csv"))
+        self.assertEqual(context[0], list(guard.CONTEXT_COLUMNS))
+
+    def test_a_problem_in_any_stream_writes_no_stream(self):
+        with self.assertRaises(sinks.GuardError) as caught:
+            self.sink.write_streams({
+                "usage": [valid_row()],
+                "context": [context_row(event="free text")],
+            })
+        self.assertEqual(caught.exception.problems,
+                         ["context row 0: column event is invalid"])
+        self.assertFalse(os.path.exists(self.store))
 
     def test_sync_is_a_no_op(self):
         self.assertIn("nothing to sync", self.sink.sync(TODAY))

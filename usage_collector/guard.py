@@ -12,6 +12,22 @@ COLUMNS = (
     "effort", "input", "cache_read", "cache_write", "output", "context",
     "web_search", "web_fetch", "tools", "compacted",
 )
+CONTEXT_PARTS = (
+    "system_prompt_chars", "instr_user_chars", "instr_project_chars",
+    "instr_local_chars", "instr_memory_chars", "instr_other_chars",
+    "instr_files", "skill_listing_chars", "skill_count",
+    "agent_listing_chars", "agent_count", "deferred_tools_chars",
+    "deferred_tool_count", "mcp_chars", "mcp_server_count",
+    "hook_context_chars",
+)
+CONTEXT_COLUMNS = (
+    "ts", "account", "machine", "project", "session", "agent",
+    "is_subagent", "agent_type", "event",
+) + CONTEXT_PARTS + ("first_turn_context",)
+SKILL_COLUMNS = ("ts", "account", "machine", "project", "session", "agent", "skill")
+CATALOG_COLUMNS = ("date", "account", "machine", "kind", "name")
+EVENTS = ("start", "compact", "fork")
+CATALOG_KINDS = ("skill", "agent")
 EFFORTS = ("low", "medium", "high", "xhigh", "max")
 ROW_INT_LIMIT = 10 ** 9
 TOTAL_INT_LIMIT = 10 ** 13
@@ -94,39 +110,78 @@ VALIDATORS = {
     "web_fetch": is_count,
     "tools": _tools,
     "compacted": _flag,
+    "event": lambda value: value in EVENTS,
+    "first_turn_context": is_count,
+    "skill": is_slug,
+    "date": is_date,
+    "kind": lambda value: value in CATALOG_KINDS,
+    "name": is_slug,
 }
+VALIDATORS.update((part, is_count) for part in CONTEXT_PARTS)
+
+
+def _usage_mismatches(row: dict) -> list:
+    parts = int(row["input"]) + int(row["cache_read"]) + int(row["cache_write"])
+    mismatches = [] if int(row["context"]) == parts else ["context"]
+    return mismatches + _agent_mismatches(row)
+
+
+def _agent_mismatches(row: dict) -> list:
+    return ["agent"] if row["is_subagent"] == "0" and row["agent"] != "" else []
+
+
+class Schema:
+    """The columns of one stream and the cross-column rules its rows must meet."""
+
+    def __init__(self, columns, label, mismatches=lambda row: []):
+        self.columns = columns
+        self.label = label
+        self.mismatches = mismatches
+
+
+SCHEMAS = {
+    "usage": Schema(COLUMNS, "row", _usage_mismatches),
+    "context": Schema(CONTEXT_COLUMNS, "context row", _agent_mismatches),
+    "skills": Schema(SKILL_COLUMNS, "skills row"),
+    "catalog": Schema(CATALOG_COLUMNS, "catalog row"),
+}
+STREAMS = tuple(SCHEMAS)
 
 
 def validate_rows(rows) -> list:
+    return validate_stream("usage", rows)
+
+
+def validate_streams(batches: dict) -> list:
+    problems = []
+    for stream, rows in batches.items():
+        problems.extend(validate_stream(stream, rows))
+    return problems
+
+
+def validate_stream(stream: str, rows) -> list:
+    schema = SCHEMAS[stream]
     problems = []
     for index, row in enumerate(rows):
-        problems.extend(_row_problems(index, row))
+        where = "%s %d" % (schema.label, index)
+        problems.extend(_row_problems(schema, where, row))
     return problems
 
 
-def _row_problems(index: int, row) -> list:
+def _row_problems(schema: Schema, where: str, row) -> list:
     if not isinstance(row, dict):
-        return ["row %d: not a row" % index]
+        return ["%s: not a row" % where]
     problems = []
-    if any(key not in VALIDATORS for key in row):
-        problems.append("row %d: unknown column" % index)
-    for column in COLUMNS:
+    if any(key not in schema.columns for key in row):
+        problems.append("%s: unknown column" % where)
+    for column in schema.columns:
         if column not in row:
-            problems.append("row %d: column %s is missing" % (index, column))
+            problems.append("%s: column %s is missing" % (where, column))
         elif not VALIDATORS[column](row[column]):
-            problems.append("row %d: column %s is invalid" % (index, column))
+            problems.append("%s: column %s is invalid" % (where, column))
     if not problems:
-        problems.extend(_consistency_problems(index, row))
-    return problems
-
-
-def _consistency_problems(index: int, row: dict) -> list:
-    problems = []
-    parts = int(row["input"]) + int(row["cache_read"]) + int(row["cache_write"])
-    if int(row["context"]) != parts:
-        problems.append("row %d: column context is invalid" % index)
-    if row["is_subagent"] == "0" and row["agent"] != "":
-        problems.append("row %d: column agent is invalid" % index)
+        problems.extend("%s: column %s is invalid" % (where, column)
+                        for column in schema.mismatches(row))
     return problems
 
 

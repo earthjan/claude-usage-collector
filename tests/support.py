@@ -5,11 +5,19 @@ import time
 
 FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
 PROJECTS = os.path.join(FIXTURES, "projects")
-CANARIES = (
+TRANSCRIPT_CANARIES = (
     "CANARY_TITLE_7f3", "CANARY_DESC_7f3", "CANARY_PATH_7f3",
     "CANARY_BRANCH_7f3", "CANARY_PROMPT_7f3", "CANARY_TOOLINPUT_7f3",
     "CANARY_REPLY_7f3",
 )
+CONTEXT_CANARIES = (
+    "CANARY_SYSPROMPT_7f3", "CANARY_INSTRUCTION_7f3", "CANARY_INSTRPATH_7f3",
+    "CANARY_SKILLLIST_7f3", "CANARY_SKILLNAME_7f3", "CANARY_SKILLBODY_7f3",
+    "CANARY_SKILLPATH_7f3", "CANARY_AGENTLINE_7f3", "CANARY_AGENTNAME_7f3",
+    "CANARY_DEFERREDLINE_7f3", "CANARY_TOOLNAME_7f3", "CANARY_TOOLDESC_7f3",
+    "CANARY_MCPNAME_7f3", "CANARY_MCPBLOCK_7f3", "CANARY_HOOKCONTEXT_7f3",
+)
+CANARIES = TRANSCRIPT_CANARIES + CONTEXT_CANARIES
 SALT = bytes(range(32))
 IDLE_SECONDS = 24 * 3600
 ALPHA = "-home-example-user-alpha"
@@ -60,10 +68,16 @@ def complete_partial_line(projects_root: str) -> None:
     mark_idle(path)
 
 
+IDLE_AT = time.time() - IDLE_SECONDS
+
+
 def mark_idle(path: str) -> None:
-    """Backdate a transcript so its last message counts as finished."""
-    past = time.time() - IDLE_SECONDS
-    os.utime(path, (past, past))
+    """Backdate a transcript so its last message counts as finished.
+
+    Every file gets the same time, which on macOS also becomes its birth
+    time, so fixture files tie on age and are read in path order.
+    """
+    os.utime(path, (IDLE_AT, IDLE_AT))
 
 
 def read_all_bytes(root: str) -> bytes:

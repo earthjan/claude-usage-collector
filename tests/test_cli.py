@@ -1,7 +1,9 @@
 import contextlib
+import csv
 import io
 import json
 import os
+import shutil
 import stat
 import subprocess
 import sys
@@ -10,6 +12,9 @@ from datetime import datetime, timezone
 from unittest import mock
 
 from usage_collector import cli, crosscheck, extract, guard, sinks
+from usage_collector import config as config_module
+from usage_collector.hashing import load_salt
+from usage_collector.names import NamePolicy
 
 from tests import support
 from tests.test_sinks import isolated_git_env
@@ -106,16 +111,80 @@ class CollectTest(CliTestCase):
         self.init()
         code, out, err = self.cli("collect")
         self.assertEqual(code, 0, err)
-        self.assertIn("11 new rows", out)
+        self.assertIn("11 new rows, 7 context events, 3 skill uses, 9 catalog names", out)
         self.assertEqual(self.store_files(), [
+            "work/2026/03/2026-03-01.catalog.csv",
+            "work/2026/03/2026-03-01.context.csv",
             "work/2026/03/2026-03-01.csv",
+            "work/2026/03/2026-03-01.skills.csv",
+            "work/2026/03/2026-03-02.catalog.csv",
+            "work/2026/03/2026-03-02.context.csv",
             "work/2026/03/2026-03-02.csv",
+            "work/2026/03/2026-03-02.skills.csv",
+            "work/2026/03/2026-03-05.context.csv",
             "work/2026/03/2026-03-05.csv",
         ])
         data = support.read_all_bytes(self.store)
         for canary in support.CANARIES:
             self.assertNotIn(canary.encode(), data)
         self.assertNotIn(b"example-user", data)
+
+    def test_v1_hash_agent_types_config_hashes_skill_and_catalog_names(self):
+        self.init()
+        with open(self.config_path) as handle:
+            data = json.load(handle)
+        data.pop("hash_names")
+        data["hash_agent_types"] = True
+        with open(self.config_path, "w") as handle:
+            json.dump(data, handle)
+        self.assertEqual(self.cli("collect")[0], 0)
+        salt = load_salt(config_module.salt_path(self.config_path))
+        policy = NamePolicy(salt, True)
+        names = {stream: self.column_values(stream, column)
+                 for stream, column in (("skills", "skill"), ("catalog", "name"))}
+        self.assertEqual(names["skills"], {policy.name("tdd"), policy.name(
+            "Odd Skill CANARY_SKILLNAME_7f3")})
+        self.assertIn(policy.name("Explore"), names["catalog"])
+        self.assertNotIn("tdd", names["catalog"])
+
+    def column_values(self, stream: str, column: str) -> set:
+        found = set()
+        for name in self.store_files():
+            if name.endswith("." + stream + ".csv"):
+                with open(os.path.join(self.store, name)) as handle:
+                    found |= {row[column] for row in csv.DictReader(handle)}
+        return found
+
+    def test_state_from_before_the_new_streams_backfills_them_without_usage_rows(self):
+        self.init()
+        self.cli("collect")
+        state_path = os.path.join(os.path.dirname(self.config_path), "state.json")
+        with open(state_path) as handle:
+            state = json.load(handle)
+        state.pop("marks")
+        for entry in state["files"].values():
+            entry.pop("streams")
+        with open(state_path, "w") as handle:
+            json.dump(state, handle)
+        shutil.rmtree(self.store)
+        code, out, err = self.cli("collect")
+        self.assertEqual(code, 0, err)
+        self.assertIn("0 new rows, 7 context events, 3 skill uses, 9 catalog names", out)
+        self.assertFalse([path for path in self.store_files()
+                          if path.endswith(("01.csv", "02.csv", "05.csv"))])
+
+    def test_guard_problem_in_a_new_stream_writes_nothing_and_echoes_nothing(self):
+        self.init()
+        with mock.patch.object(NamePolicy, "name", lambda _self, value: value or ""):
+            code, out, err = self.cli("collect")
+        self.assertEqual(code, 1)
+        self.assertIn("catalog row 2: column name is invalid", err)
+        self.assertIn("skills row 1: column skill is invalid", err)
+        for canary in support.CANARIES:
+            self.assertNotIn(canary, out + err)
+        self.assertFalse(os.path.exists(self.store))
+        state = os.path.join(os.path.dirname(self.config_path), "state.json")
+        self.assertFalse(os.path.exists(state))
 
     def test_second_collect_appends_only_new_rows(self):
         self.init()
@@ -134,6 +203,8 @@ class CollectTest(CliTestCase):
         self.assertEqual(code, 0)
         self.assertIn("2026-03-01: 7", out)
         self.assertIn("2026-03-02: 3", out)
+        for line in ("context events: 7", "skill uses: 3", "catalog names: 9"):
+            self.assertIn(line, out)
         self.assertIn(",".join(guard.COLUMNS), out)
         self.assertEqual(len([l for l in out.splitlines() if l.startswith("2026-03-01T")]), 3)
         self.assertFalse(os.path.exists(self.store))
@@ -167,7 +238,7 @@ class CollectTest(CliTestCase):
         self.init()
         bad = support.B2_LINE.replace("claude-opus-5-5", "SECRET model name")
         path = self.append_line(bad)
-        with mock.patch.object(extract, "_model_slug", lambda model, _settings: model):
+        with mock.patch.object(extract, "model_slug", lambda model, _salt: model):
             code, out, err = self.cli("collect")
         self.assertEqual(code, 1)
         self.assertIn("column model is invalid", err)
@@ -284,12 +355,54 @@ class SyncAndRunTest(CliTestCase):
 
     def test_run_crosschecks_previous_month_once(self):
         self.init()
+        self.edit_config(crosscheck={"command": "ccusage", "enabled": True, "period": "month"})
         self.fake_command("ccusage")
         with mock.patch.object(crosscheck, "cmd_crosscheck", return_value=0) as check:
             self.assertEqual(self.cli("run", now=FIRST_OF_MONTH)[0], 0)
             self.assertEqual(self.cli("run", now=NOW)[0], 0)
         self.assertEqual(check.call_count, 1)
         self.assertEqual(check.call_args[0][0].month, "2026-02")
+
+    def test_run_crosschecks_the_last_completed_week_once(self):
+        self.init()
+        self.fake_command("ccusage")
+        with mock.patch.object(crosscheck, "cmd_crosscheck", return_value=0) as check:
+            self.assertEqual(self.cli("run", now=NOW)[0], 0)
+            self.assertEqual(self.cli("run", now=NOW)[0], 0)
+        self.assertEqual(check.call_count, 1)
+        self.assertEqual(check.call_args[0][0].week, "2026-W10")
+        self.assertIsNone(check.call_args[0][0].month)
+
+    def test_run_catches_up_missed_weeks_and_logs_the_too_old_ones(self):
+        self.init()
+        self.fake_command("ccusage")
+        with mock.patch.object(crosscheck, "cmd_crosscheck", return_value=0) as check:
+            self.cli("run", now=datetime(2026, 2, 10, 18, 0, tzinfo=timezone.utc))
+            code, out, _err = self.cli("run", now=NOW)
+        self.assertEqual(code, 0)
+        weeks = [call[0][0].week for call in check.call_args_list]
+        self.assertEqual(weeks, ["2026-W06", "2026-W09", "2026-W10"])
+        self.assertIn("skipped cross-check for 2026-W07", out)
+        self.assertIn("skipped cross-check for 2026-W08", out)
+
+    def test_run_after_a_v1_monthly_state_checks_only_the_last_completed_week(self):
+        self.init()
+        self.fake_command("ccusage")
+        state_path = os.path.join(os.path.dirname(self.config_path), "state.json")
+        with open(state_path, "w") as handle:
+            json.dump({"crosscheck_month": "2026-02"}, handle)
+        with mock.patch.object(crosscheck, "cmd_crosscheck", return_value=0) as check:
+            self.assertEqual(self.cli("run", now=NOW)[0], 0)
+        self.assertEqual([call[0][0].week for call in check.call_args_list], ["2026-W10"])
+
+    def test_run_retries_a_failed_week_on_the_next_run(self):
+        self.init()
+        self.fake_command("ccusage")
+        with mock.patch.object(crosscheck, "cmd_crosscheck", side_effect=[1, 0]) as check:
+            self.assertEqual(self.cli("run", now=NOW)[0], 1)
+            self.assertEqual(self.cli("run", now=NOW)[0], 0)
+        weeks = [call[0][0].week for call in check.call_args_list]
+        self.assertEqual(weeks, ["2026-W10", "2026-W10"])
 
     def test_run_respects_disabled_crosscheck(self):
         self.init()
@@ -311,13 +424,54 @@ class DoctorTest(CliTestCase):
         self.assertNotIn("FAIL", out)
         self.assertIn("OK   ccusage", out)
 
-    def test_warns_about_short_transcript_retention(self):
+    def retention(self):
+        lines = self.cli("doctor")[1].splitlines()
+        return next(line for line in lines if "cleanupPeriodDays" in line)
+
+    def test_default_or_three_week_retention_is_enough_for_the_weekly_check(self):
         self.init()
-        self.write_settings({"cleanupPeriodDays": 30})
-        out = self.cli("doctor")[1]
-        self.assertIn("WARN cleanupPeriodDays", out)
-        self.write_settings({})
-        self.assertIn("WARN cleanupPeriodDays", self.cli("doctor")[1])
+        for settings in ({}, {"cleanupPeriodDays": 30}, {"cleanupPeriodDays": 22}):
+            with self.subTest(settings=settings):
+                self.write_settings(settings)
+                line = self.retention()
+                self.assertTrue(line.startswith("OK   "), line)
+                self.assertIn("weekly", line)
+
+    def test_warns_when_retention_is_shorter_than_the_weekly_catch_up(self):
+        self.init()
+        for days in (13, 14, 21):
+            with self.subTest(days=days):
+                self.write_settings({"cleanupPeriodDays": days})
+                line = self.retention()
+                self.assertTrue(line.startswith("WARN "), line)
+                self.assertIn("below 22", line)
+                self.assertNotIn("90", line)
+
+    def test_month_period_needs_two_months_of_retention(self):
+        self.init()
+        self.edit_config(crosscheck={"command": "ccusage", "enabled": True, "period": "month"})
+        for settings, level in (({}, "WARN "), ({"cleanupPeriodDays": 30}, "WARN "),
+                                ({"cleanupPeriodDays": 61}, "WARN "),
+                                ({"cleanupPeriodDays": 62}, "OK   ")):
+            with self.subTest(settings=settings):
+                self.write_settings(settings)
+                line = self.retention()
+                self.assertTrue(line.startswith(level), line)
+                self.assertIn("monthly", line)
+
+    def test_unreadable_retention_setting_warns_instead_of_reading_as_unset(self):
+        self.init()
+        folder = os.path.join(self.environ["HOME"], ".claude")
+        os.makedirs(folder, exist_ok=True)
+        for text in ("{not json", "[]", '{"cleanupPeriodDays": "7"}',
+                     '{"cleanupPeriodDays": 7.5}', '{"cleanupPeriodDays": true}'):
+            with self.subTest(text=text):
+                with open(os.path.join(folder, "settings.json"), "w") as handle:
+                    handle.write(text)
+                line = self.retention()
+                self.assertTrue(line.startswith("WARN "), line)
+                self.assertIn("could not read", line)
+                self.assertNotIn("7", line.replace("cleanupPeriodDays", ""))
 
     def test_missing_config_fails(self):
         code, out, _err = self.cli("doctor")
@@ -353,14 +507,27 @@ class ResearchCommandsTest(CliTestCase):
             handle.write("#!/bin/sh\ncat <<'EOF'\n%s\nEOF\n" % json.dumps(payload))
         os.chmod(path, 0o755)
 
-    def test_crosscheck_uses_the_session_path_and_previous_month(self):
+    def test_crosscheck_uses_the_session_path_and_last_completed_week(self):
         self.init()
         self.edit_config(machine_label="laptop-1")
-        self.fake_ccusage({"daily": [{"date": "2026-02-27", "modelBreakdowns": [
+        self.fake_ccusage({"daily": [{"date": "2026-03-04", "modelBreakdowns": [
             {"modelName": "claude-opus-5-5", "inputTokens": 3}]}]})
         code, _out, err = self.cli("crosscheck")
         self.assertEqual(code, 0, err)
-        self.assertEqual(self.store_files(), ["checks/work/laptop-1/2026-02.json"])
+        self.assertEqual(self.store_files(), ["checks/work/laptop-1/2026-W10.json"])
+
+    def test_crosscheck_and_compare_take_week_and_month_flags(self):
+        self.init()
+        self.edit_config(machine_label="laptop-1")
+        self.fake_ccusage({"daily": []})
+        self.assertEqual(self.cli("crosscheck", "--week", "2026-W08")[0], 0)
+        self.assertEqual(self.cli("crosscheck", "--month", "2026-01")[0], 0)
+        self.assertEqual(self.store_files(), [
+            "checks/work/laptop-1/2026-01.json", "checks/work/laptop-1/2026-W08.json",
+        ])
+        code, out, err = self.cli("compare", "--week", "2026-W08")
+        self.assertEqual(code, 0, out + err)
+        self.assertIn("compared 0 day/model pair(s)", out)
 
     def test_run_crosscheck_reaches_ccusage_on_the_session_path(self):
         self.init()
@@ -368,11 +535,12 @@ class ResearchCommandsTest(CliTestCase):
         self.fake_ccusage({"daily": []})
         code, _out, err = self.cli("run", now=FIRST_OF_MONTH)
         self.assertEqual(code, 0, err)
-        self.assertIn("checks/work/laptop-1/2026-02.json", self.store_files())
+        self.assertIn("checks/work/laptop-1/2026-W08.json", self.store_files())
 
     def test_run_just_after_utc_midnight_checks_the_whole_utc_month(self):
         self.init()
-        self.edit_config(machine_label="laptop-1")
+        self.edit_config(machine_label="laptop-1", crosscheck={
+            "command": "ccusage", "enabled": True, "period": "month"})
         log = self.tmp.join("argv.log")
         path = os.path.join(self.bin, "ccusage")
         with open(path, "w") as handle:

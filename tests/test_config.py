@@ -63,6 +63,13 @@ class InitTest(ConfigTestCase):
         })
         self.assertEqual(loaded["schedule"], "07:30")
 
+    def test_init_writes_hash_names_not_the_old_alias(self):
+        config.init_config(self.path, account="work")
+        with open(self.path) as handle:
+            written = json.load(handle)
+        self.assertIs(written["hash_names"], False)
+        self.assertNotIn("hash_agent_types", written)
+
     def test_init_refuses_to_overwrite_without_force(self):
         config.init_config(self.path, account="work")
         with self.assertRaises(config.ConfigError):
@@ -91,8 +98,18 @@ class LoadTest(ConfigTestCase):
         self.assertEqual(loaded["sources"], ["~/.claude/projects"])
         self.assertIs(loaded["round_ts_to_hour"], False)
         self.assertIs(loaded["hash_agent_types"], False)
+        self.assertIs(loaded["hash_names"], False)
         self.assertIsNone(loaded["machine_label"])
-        self.assertEqual(loaded["crosscheck"], {"command": "ccusage", "enabled": True})
+        self.assertEqual(
+            loaded["crosscheck"], {"command": "ccusage", "enabled": True, "period": "week"},
+        )
+
+    def test_crosscheck_period_can_be_month_and_old_objects_still_load(self):
+        for crosscheck in ({"command": "ccusage", "enabled": True, "period": "month"},
+                           {"command": "ccusage", "enabled": True}):
+            with self.subTest(crosscheck=crosscheck):
+                self.write({"account": "work", "crosscheck": crosscheck})
+                self.assertEqual(config.load_config(self.path)["crosscheck"], crosscheck)
 
     def test_missing_file_raises(self):
         with self.assertRaises(config.ConfigError):
@@ -107,9 +124,11 @@ class LoadTest(ConfigTestCase):
             {"account": "work", "machine_label": "my laptop"},
             {"account": "work", "sources": "~/.claude/projects"},
             {"account": "work", "round_ts_to_hour": "yes"},
+            {"account": "work", "hash_names": "yes"},
             {"account": "work", "crosscheck": False},
             {"account": "work", "crosscheck": {"command": "", "enabled": True}},
             {"account": "work", "crosscheck": {"command": "ccusage", "enabled": "no"}},
+            {"account": "work", "crosscheck": {"command": "ccusage", "period": "day"}},
             {"account": "work", "weights": {"output": "five"}},
             {"account": "work", "weights": {"thinking": 1}},
             {"account": "work", "weights": []},

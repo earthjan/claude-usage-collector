@@ -1,0 +1,92 @@
+{
+  "2026-04-20": {
+    "claude-haiku-4-5": {
+      "cache_read": 4220097,
+      "cache_write": 392801,
+      "input": 1736,
+      "output": 41258
+    },
+    "claude-opus-5-5": {
+      "cache_read": 3418919,
+      "cache_write": 262069,
+      "input": 972,
+      "output": 25452
+    },
+    "claude-sonnet-5-5": {
+      "cache_read": 11337268,
+      "cache_write": 821415,
+      "input": 3258,
+      "output": 93392
+    }
+  },
+  "2026-04-21": {
+    "claude-haiku-4-5": {
+      "cache_read": 234203,
+      "cache_write": 48425,
+      "input": 314,
+      "output": 3126
+    },
+    "claude-opus-5-5": {
+      "cache_read": 1374342,
+      "cache_write": 157137,
+      "input": 688,
+      "output": 19499
+    },
+    "claude-sonnet-5-5": {
+      "cache_read": 1173271,
+      "cache_write": 146289,
+      "input": 532,
+      "output": 17729
+    }
+  },
+  "2026-04-22": {
+    "claude-haiku-4-5": {
+      "cache_read": 256451,
+      "cache_write": 59945,
+      "input": 263,
+      "output": 5399
+    },
+    "claude-opus-5-5": {
+      "cache_read": 2583274,
+      "cache_write": 274313,
+      "input": 1257,
+      "output": 24950
+    },
+    "claude-sonnet-5-5": {
+      "cache_read": 3158906,
+      "cache_write": 315831,
+      "input": 1395,
+      "output": 34872
+    }
+  },
+  "2026-04-23": {
+    "claude-opus-5-5": {
+      "cache_read": 4142124,
+      "cache_write": 367435,
+      "input": 1459,
+      "output": 42449
+    }
+  },
+  "2026-04-24": {
+    "claude-opus-5-5": {
+      "cache_read": 2684847,
+      "cache_write": 230073,
+      "input": 813,
+      "output": 20525
+    }
+  },
+  "2026-04-26": {
+    "claude-haiku-4-5": {
+      "cache_read": 67728,
+      "cache_write": 25276,
+      "input": 38,
+      "output": 771
+    },
+    "claude-sonnet-5-5": {
+      "cache_read": 11637186,
+      "cache_write": 560884,
+      "input": 2580,
+      "output": 56018
+    }
+  }
+}

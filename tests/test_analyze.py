@@ -207,6 +207,73 @@ class AnalyzeCommandTest(unittest.TestCase):
         self.assertIn("turns: 3", out)
         self.assertIn("skipped 1", out)
 
+    def test_context_skill_and_catalog_files_are_not_read_as_usage_rows(self):
+        from tests.test_guard import catalog_row, context_row, skill_row
+        FolderSink(self.store, "work").write_streams({
+            "context": [context_row(ts="2026-04-01T10:00:00Z")],
+            "skills": [skill_row(ts="2026-04-01T10:00:00Z")],
+            "catalog": [catalog_row(date="2026-04-01")],
+        })
+        _code, out, _err = self.analyze()
+        self.assertIn("turns: 3", out)
+        self.assertNotIn("skipped", out)
+
+    def write_streams(self):
+        from tests.test_guard import catalog_row, context_row, skill_row
+        FolderSink(self.store, "work").write_streams({
+            "context": [
+                context_row(ts="2026-04-01T10:00:00Z", first_turn_context="24000"),
+                context_row(ts="2026-04-01T12:00:00Z", event="compact"),
+                context_row(ts="2026-04-02T10:00:00Z", event="fork",
+                            first_turn_context="180000"),
+                context_row(ts="2026-04-05T10:00:00Z", agent=AGENT_A, is_subagent="1",
+                            agent_type="Explore", first_turn_context="9000"),
+            ],
+            "skills": [skill_row(ts="2026-04-01T10:00:00Z", skill="tdd")],
+            "catalog": [catalog_row(date="2026-04-01", name="tdd"),
+                        catalog_row(date="2026-04-01", name="slides"),
+                        catalog_row(date="2026-04-01", kind="agent", name="Explore"),
+                        catalog_row(date="2026-04-01", kind="agent", name="docs-writer")],
+        })
+
+    def test_starting_context_and_skills_sections(self):
+        self.write_streams()
+        code, out, err = self.analyze()
+        self.assertEqual(code, 0, err)
+        section = out[out.index("Starting context"):]
+        for text in ("24.0K", "9.0K", "compactions: main thread 1, subagents 0",
+                     "forked or continued: main thread 1, subagents 0",
+                     "System prompt", "2026-W14", "chars / 4"):
+            self.assertIn(text, section)
+        self.assertNotIn("180.0K", section)
+        skills = out[out.index("Skills and agents"):]
+        self.assertIn("tdd", skills)
+        never = skills[skills.index("Listed but never used"):]
+        self.assertIn("slides", never)
+        self.assertIn("docs-writer", never)
+        self.assertNotIn("Explore", never)
+
+    def test_stream_sections_respect_since(self):
+        self.write_streams()
+        out = self.analyze(since="2026-04-02")[1]
+        section = out[out.index("Starting context"):]
+        self.assertNotIn("24.0K", section)
+        self.assertIn("9.0K", section)
+
+    def test_store_without_streams_says_none_were_collected(self):
+        out = self.analyze()[1]
+        self.assertIn("no context events collected", out)
+        self.assertIn("no skill or catalog rows collected", out)
+
+    def test_bad_stream_rows_are_counted_as_skipped(self):
+        self.write_streams()
+        path = os.path.join(self.store, "work", "2026", "04", "2026-04-01.skills.csv")
+        with open(path, "a") as handle:
+            handle.write("CANARY_SKILLBODY_7f3\n")
+        out = self.analyze()[1]
+        self.assertIn("skipped 1", out)
+        self.assertNotIn("CANARY", out)
+
     def test_bad_since_and_missing_store_are_errors(self):
         self.assertEqual(self.analyze(since="April")[0], 1)
         code, _out, err = self.analyze(store=os.path.join(self.store, "nope"))

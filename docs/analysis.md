@@ -21,7 +21,8 @@ claude-usage report  --store ~/usage-data --out report.html --since 2026-01-01
 | `--svg PATH` | `report` | Also write the daily chart as a standalone SVG file. |
 
 A demo report built from synthetic data is in
-[demo/report.html](demo/report.html). You can rebuild it, and the preview image `docs/img/report-preview.svg`,
+[demo/report.html](demo/report.html). The demo store holds two accounts and
+every stream. You can rebuild it, and the preview image `docs/img/report-preview.svg`,
 with:
 
 ```sh
@@ -54,6 +55,44 @@ goes to subagents and to large contexts.**
   went over 200K, and the share that finished in 10 turns or fewer. Many
   short agents with huge contexts usually mean a lot of context was handed
   over for a small job.
+- **Starting context:** how big a context is before any work starts, read
+  from the context size files.
+  - The median and 90th percentile of `first_turn_context`, for main
+    sessions and for subagents.
+  - The average makeup of a `start` event, part by part (system prompt,
+    each kind of instruction file, skill listing, agent listing, deferred
+    tools, MCP instructions, hook context), as estimated tokens.
+  - The median starting context per ISO week, so you can see whether your
+    setup grows over time.
+  - How many `compact` events there were.
+  - How many `fork` events there were. A forked or continued session, or
+    a forked subagent, starts with copied history, so its first turn is
+    not a fresh start. These are counted but left out of the median, the
+    90th percentile, the makeup and the weekly trend.
+- **Skills and agents:** the skills used most, from the skill use files.
+  Then the names the catalog listed during the period that were never
+  used: skills that were never invoked, and agent types that were never
+  spawned (checked against the usage rows' `agent_type`). A listed name
+  that is not a slug, for example one containing `/` or longer than 64
+  characters, is stored as a hash, so it shows as 12 hex characters here.
+
+The report adds three pieces for these: a stacked bar of the average
+starting context by part, a weekly starting-context trend chart, and a
+"listed but never used" table.
+
+### Estimated tokens
+
+**Context sizes are stored as characters, and `analyze` turns them into
+estimated tokens by dividing by 4.** That is a rough rule of thumb for
+English text and code, not a tokenizer. Use it to compare parts with each
+other and over time. `first_turn_context` is a real token count from the
+API, so the gap between it and the sum of the estimated parts is roughly
+the first prompt, the built-in tool definitions and anything else that is
+not attached as one of the measured parts.
+
+A big instruction file or a long skill listing is paid for on every turn
+of every session, mostly as cache reads. The starting-context section is
+there to make that cost visible.
 
 The report is one HTML file with inline SVG charts. It makes no network
 requests, needs no JavaScript, and follows your system's light or dark
@@ -106,12 +145,20 @@ The store is plain CSV, so any tool can read it. For example, with Python:
 ```python
 import csv, glob
 
-rows = []
-for path in glob.glob("usage-data/*/????/??/*.csv"):
-    with open(path) as handle:
-        rows.extend(csv.DictReader(handle))
-print(sum(int(r["output"]) for r in rows))
+def read(pattern):
+    rows = []
+    for path in glob.glob("usage-data/*/????/??/" + pattern):
+        with open(path) as handle:
+            rows.extend(csv.DictReader(handle))
+    return rows
+
+usage = read("????-??-??.csv")
+starts = [r for r in read("*.context.csv") if r["event"] == "start"]
+print(sum(int(r["output"]) for r in usage))
+print(sum(int(r["first_turn_context"]) for r in starts) / max(len(starts), 1))
 ```
 
-The pattern above skips `checks/`, which holds JSON. Column meanings are in
+Match usage files with `????-??-??.csv`, not `*.csv`, or the context,
+skills and catalog files are read as usage rows too. The patterns skip
+`checks/`, which holds JSON. Column meanings are in
 [schema.md](schema.md).

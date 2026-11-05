@@ -1,8 +1,8 @@
 # Privacy
 
 **Session content never leaves the machine. Only timestamps, token counts,
-short labels and salted hashes do, and only after a strict check of every
-value.** This page explains how that is enforced, what the hashes do and do
+character lengths, short labels and salted hashes do, and only after a
+strict check of every value.** This page explains how that is enforced, what the hashes do and do
 not hide, and how to check it yourself.
 
 ![Transcript content, names, paths and the salt stay on the machine. Only timestamps, counts, slugs and salted hashes pass the guard.](img/privacy-boundary.svg)
@@ -22,6 +22,9 @@ These are the only values written to the store. The full column list is in
 | Agent type, spawn depth, fork flag | a slug such as `Explore` (or a hash), an integer, 0 or 1 |
 | Project, session, agent, machine | 12 character salted hashes |
 | Account | the label you chose, such as `work` |
+| Sizes of what was attached to a context | character lengths and counts, never the text (see below) |
+| Skill names that were used | a slug such as `code-review` (or a hash) |
+| Skill and agent names that were listed | slugs (or hashes), one per day |
 
 These never leave, because the extractor never reads them into a row:
 
@@ -31,6 +34,43 @@ These never leave, because the extractor never reads them into a row:
 - file paths, project folder names and git branch names
 - hostnames, raw session ids and raw agent ids
 - the salt, the config and the state file
+- the text of instruction files, skill listings and skill files, agent
+  listings, deferred tool lines and descriptions, MCP instructions, hook
+  output and the system prompt, and every path in them
+
+### Context sizes: measured, never copied
+
+**For what Claude Code attaches to a context, only the length of each text
+leaves, never the text.** These attachment fields hold free text. The
+collector passes each one to a length count and keeps only the number.
+
+| Attachment | Field | What leaves |
+|---|---|---|
+| `prompt_snapshot` | `systemPrompt` | `system_prompt_chars` |
+| `instructions` | each file's `content` | its length, added to `instr_user_chars`, `instr_project_chars`, `instr_local_chars`, `instr_memory_chars` or `instr_other_chars` by the file's `type` |
+| `instructions` | each file's `path` | nothing; files are only counted in `instr_files` |
+| `skill_listing` | `content` | `skill_listing_chars` |
+| `skill_listing` | `skillCount` | `skill_count` |
+| `skill_listing` | `names` | catalog rows under the name rule, and `skill_count` when `skillCount` is missing |
+| `agent_listing_delta` | `addedLines` | `agent_listing_chars` |
+| `agent_listing_delta` | `addedTypes` | `agent_count`, and catalog rows under the name rule |
+| `agent_listing_delta` | `builtInTypes` | catalog rows under the name rule |
+| `deferred_tools_delta` | `addedLines` | `deferred_tools_chars` |
+| `deferred_tools_delta` | `addedNames` | `deferred_tool_count` only |
+| `deferred_tools_record` | each entry's `name`, `description`, `input_schema` | their lengths, added to `deferred_tools_chars`, and `deferred_tool_count` |
+| `mcp_instructions_delta` | `addedBlocks` | `mcp_chars` |
+| `mcp_instructions_delta` | `addedNames` | `mcp_server_count` only |
+| `hook_additional_context` | `content` | `hook_context_chars` |
+| `invoked_skills` | each skill's `name` | a skill use row, under the name rule |
+| `invoked_skills` | each skill's `path` and `content` | nothing |
+
+Deferred tool names and MCP server names are counted, never written, not
+even as hashes. Every other field of an attachment, such as `hookName` or
+`digests`, is never read.
+
+"The name rule" means a name that is a simple slug is written as is, and
+anything else becomes a salted hash. With `hash_names` on, every name is
+hashed.
 
 ## How it is enforced
 
@@ -40,8 +80,10 @@ These never leave, because the extractor never reads them into a row:
 
 `extract.py` reads named fields from each transcript line: `type`,
 `subtype`, `timestamp`, `effort`, and inside `message`: `id`, `model`,
-`usage` and the `name` of each `tool_use` item. It never touches anything
-else. New fields that Claude Code adds later are ignored without any code
+`usage` and the `name` of each `tool_use` item. From `attachment` lines,
+`context.py` and `streams.py` read only the fields in the table above, plus
+the line's `uuid`. The `uuid` is used only to notice history copied into a
+forked session, and is never written. Nothing else is touched. New fields that Claude Code adds later are ignored without any code
 change. From a subagent's `.meta.json` it reads only `agentType`,
 `spawnDepth` and `isFork`.
 
@@ -50,7 +92,10 @@ Values that might be free text are reduced before they reach a row:
 - A tool name that is not a simple slug becomes a hash. Every MCP tool name
   (`mcp__<server>__<tool>`) becomes `mcp:<hash>`, because server names can
   be private.
-- An agent type that is not a simple slug becomes a hash.
+- An agent type, skill name or listed name that is not a simple slug
+  becomes a hash. One shared name policy (`names.py`) does this for all of
+  them, so `hash_names` covers them all at once.
+- Attached text becomes its length, as described above.
 - An `effort` value outside `low`, `medium`, `high`, `xhigh`, `max` becomes
   empty.
 
@@ -63,18 +108,22 @@ characters. The salt is created by `init` in your config folder with mode
 
 ### 3. The guard fails closed
 
-`guard.py` checks every row before anything is written:
+`guard.py` checks every row of every file before anything is written.
+Usage rows, context sizes, skill uses and catalog rows each have their own
+schema:
 
-- Each of the 21 columns has a strict rule: a timestamp pattern, a slug
+- Each column has a strict rule: a timestamp or date pattern, a slug
   pattern of at most 64 characters with no spaces, a 12 hex hash pattern,
   a fixed list of values, or a non-negative integer up to 10^9.
 - An unknown column or a missing column is a problem.
 - `context` must equal input plus cache read plus cache write, and a main
   thread row must have an empty agent.
 
-**If any row has any problem, nothing is written, the command exits 1, and
-the read offsets do not move.** The error names the row number and column,
-never the value, so a rejected value cannot leak through the log either.
+**If any row of any file has any problem, nothing is written, the command
+exits 1, and the read offsets do not move.** The error names the file kind,
+row number and column (for example `context row 0: column event is
+invalid`), never the value, so a rejected value cannot leak through the log
+either.
 
 The same guard checks `ccusage` totals before they are stored.
 
@@ -88,14 +137,21 @@ What a reader of the store can learn:
 
 - **Your usage pattern.** Timestamps show when you work. Set
   `round_ts_to_hour` to blur this to the hour.
-- **Which models, tools and agent types you use.** Agent types and
-  tool names that are simple slugs are written as is. That covers the
-  built-in ones (`Explore`, `general-purpose`, `Read`, `Bash`), but also
-  agents you define yourself in `.claude/agents`, plugin agents such as
-  `plugin:agent`, and custom non-MCP tool names. If you name agents after
-  projects, clients or teams, those names reach the store. Set
-  `hash_agent_types` to hash every agent type; it is the safe choice for
-  anyone with project-named agents. MCP tool names are always hashed.
+- **Which models, tools, agent types and skills you use, and which ones
+  you have installed.** Agent types, skill names and tool names that are
+  simple slugs are written as is. That covers the built-in ones
+  (`Explore`, `general-purpose`, `Read`, `Bash`), but also agents and
+  skills you define yourself, plugin agents such as `plugin:agent`, and
+  custom non-MCP tool names. The catalog file lists every skill and agent
+  type that was offered on a day, even ones you never used. If you name
+  agents or skills after projects, clients or teams, those names reach the
+  store. Set `hash_names` to hash every name; it is the safe choice for
+  anyone with project-named agents or skills. The older `hash_agent_types`
+  key does the same. MCP tool names are always hashed.
+- **How large your setup is.** Context sizes show how long your
+  instruction files, listings and system prompt are, and how many skills,
+  agents, deferred tools and MCP servers were offered. They do not show
+  what any of them say.
 - **Model ids.** A model id containing `claude-` is kept from that point
   on (a provider prefix or an `@version` suffix is dropped). Any other
   model id, such as a custom gateway name, is hashed, and a missing one
@@ -128,8 +184,9 @@ repo. See [multi-account.md](multi-account.md).
 claude-usage collect --dry-run
 ```
 
-It prints the number of new rows per day and the first three rows as CSV.
-It writes nothing and does not move the offsets.
+It prints the number of new usage rows per day, the number of new context
+events, skill uses and catalog names, and the first three usage rows as
+CSV. It writes nothing and does not move the offsets.
 
 Then search the real store for words that must never appear. Pick words
 from your own work: a project name, a branch name, a phrase from a prompt.
@@ -138,10 +195,16 @@ from your own work: a project name, a branch name, a phrase from a prompt.
 grep -rIl -e 'my-secret-project' -e 'feature/some-branch' ~/usage-data
 ```
 
-No output means no match. You can also open any CSV in a spreadsheet: every
-cell is a number, a hash, a timestamp or a short label.
+No output means no match. The search covers the context, skills and
+catalog files too. A good extra test is a phrase from one of your own
+`CLAUDE.md` files or skills. You can also open any CSV in a spreadsheet:
+every cell is a number, a hash, a timestamp or a short label.
 
 The test suite checks the same thing on synthetic transcripts that contain
 marker strings in titles, paths, branches, prompts, tool inputs, replies and
-agent descriptions. It asserts that none of them appears anywhere in the
-written store.
+agent descriptions, and in every free-text attachment field: instruction
+content and paths, skill listings, skill content and paths, agent listing
+lines, deferred tool lines and descriptions, MCP blocks, hook output and
+the system prompt. Non-slug skill, agent, MCP and deferred tool names carry
+markers too. It asserts that none of them appears anywhere in the written
+store, in any file.

@@ -5,33 +5,32 @@ Everything else (prompts, replies, tool input, titles, paths) is ignored.
 """
 import json
 import os
-import re
 import time
-from datetime import datetime, timedelta, timezone
 
 from . import guard
 from .hashing import hash_value
+from .models import model_slug
+from .names import NamePolicy
+from .records import count as _count
+from .records import format_ts as _format_ts
+from .records import is_compact_boundary as _is_compact_boundary
+from .records import usage_message as _usage_message
+from .streams import EXTRA_STREAMS, StreamRun
 
-SYNTHETIC_MODEL = "<synthetic>"
 SETTLE_SECONDS = 600
-UNKNOWN_MODEL = "unknown"
-CLAUDE_MODEL = re.compile(r"claude-[A-Za-z0-9._:-]*")
-TIMESTAMP = re.compile(
-    r"(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?"
-    r"(Z|[+-]\d{2}:\d{2})?"
-)
 
 
 class Settings:
     def __init__(self, salt, account, hostname, machine_label=None,
                  round_ts_to_hour=False, hash_agent_types=False,
-                 settle_seconds=SETTLE_SECONDS, clock=time.time):
+                 hash_names=False, settle_seconds=SETTLE_SECONDS,
+                 clock=time.time):
         self.salt = salt
         self.account = account
         self.hostname = hostname
         self.machine_label = machine_label
         self.round_ts_to_hour = round_ts_to_hour
-        self.hash_agent_types = hash_agent_types
+        self.names = NamePolicy(salt, hash_names or hash_agent_types)
         self.settle_seconds = settle_seconds
         self.clock = clock
 
@@ -40,18 +39,35 @@ class Settings:
         return self.machine_label or hash_value(self.salt, self.hostname)
 
 
+class FileProgress:
+    def __init__(self, offset: int, compact: bool, streams: dict):
+        self.offset = offset
+        self.compact = compact
+        self.streams = streams
+
+
 class Extraction:
-    def __init__(self, rows, files, seen_ids, sources=None):
+    def __init__(self, rows, files, seen_ids, sources, extra: StreamRun):
         self.rows = rows
         self.files = files
         self.seen_ids = seen_ids
-        self.sources = sources or []
+        self.sources = sources
+        self.extra = extra
+
+    @property
+    def streams(self) -> dict:
+        """Rows of every stream by name, usage first."""
+        found = {"usage": self.rows}
+        found.update(self.extra.rows)
+        return found
 
     def files_of_rejected_rows(self) -> list:
         """Local transcript paths of rows the guard rejects, so the user can find them."""
+        sources = dict(self.extra.sources, usage=self.sources)
         return sorted({
-            source for row, source in zip(self.rows, self.sources)
-            if guard.validate_rows([row])
+            source for stream, rows in self.streams.items()
+            for row, source in zip(rows, sources[stream])
+            if guard.validate_stream(stream, [row])
         })
 
 
@@ -60,9 +76,11 @@ def extract(sources, state, settings) -> Extraction:
 
 
 def apply(extraction, state, today) -> None:
-    for path, (offset, compact) in extraction.files.items():
-        state.set_file(path, offset, compact)
+    for path, progress in extraction.files.items():
+        state.set_file(path, progress.offset, progress.compact, progress.streams)
     state.mark_seen(extraction.seen_ids, today)
+    for kind, keys in extraction.extra.marks.items():
+        state.add_marks(kind, keys, today)
     state.prune(today)
 
 
@@ -85,10 +103,20 @@ class TranscriptFile:
     def has_meta(self) -> bool:
         return self.is_subagent and os.path.isfile(self.meta_path)
 
+    @property
+    def born(self) -> float:
+        """When the file was created, where the platform records it, else 0."""
+        try:
+            return getattr(os.stat(self.path), "st_birthtime", 0.0)
+        except OSError:
+            return 0.0
+
     def read_order(self) -> tuple:
         # Forked sessions can hold copies of a subagent file without its
-        # meta.json, so the copy beside the meta must win the dedupe.
-        return (self.is_subagent, not self.has_meta, self.path)
+        # meta.json, so the copy beside the meta must win the dedupe. A
+        # forked or continued session copies its parent's history, and the
+        # parent always exists first, so older files claim shared ids.
+        return (self.is_subagent, not self.has_meta, self.born, self.path)
 
 
 def discover(root: str) -> list:
@@ -151,36 +179,48 @@ class _Extractor:
         self.sources = []
         self.rows_by_id = {}
         self.files = {}
+        self.extra = StreamRun(state, settings)
 
     def run(self, sources) -> Extraction:
         files = [found for root in sources for found in discover(root)]
         for transcript in sorted(files, key=TranscriptFile.read_order):
             self._read_file(transcript)
-        return Extraction(self.rows, self.files, list(self.rows_by_id), self.sources)
+        return Extraction(
+            self.rows, self.files, list(self.rows_by_id), self.sources, self.extra
+        )
 
     def _read_file(self, transcript) -> None:
         path = transcript.path
-        offset, compact = self._start(path)
-        records, end = self._finished_records(path, offset)
+        offsets, compact = self._start(path)
+        positions, records, end = self._finished_records(path, min(offsets.values()))
         identity = _FileIdentity(transcript, self.settings).columns()
-        for record in filter(None, records):
-            compact = self._take(record, identity, compact, path)
-        self.files[path] = (end, compact)
+        streams = self.extra.file_streams(path, identity, offsets)
+        for position, record in zip(positions, records):
+            if record is None:
+                continue
+            if position >= offsets["usage"]:
+                compact = self._take(record, identity, compact, path)
+            streams.take(record, position)
+        self.files[path] = FileProgress(end, compact, streams.offsets(end))
 
     def _start(self, path: str) -> tuple:
-        offset = self.state.offset_for(path)
-        if os.path.getsize(path) < offset:
-            return 0, False
-        return offset, self.state.compact_pending(path)
+        offsets = {stream: self.state.stream_offset(path, stream) for stream in EXTRA_STREAMS}
+        offsets["usage"] = self.state.offset_for(path)
+        if os.path.getsize(path) < max(offsets.values()):
+            return dict.fromkeys(offsets, 0), False
+        return offsets, self.state.compact_pending(path)
 
     def _finished_records(self, path: str, offset: int) -> tuple:
+        """Returns each line's byte position, its record, and where the next read starts."""
         lines, end = read_new_lines(path, offset)
+        positions = _line_positions(lines, offset)
         records = [parse_line(line) for line in lines]
         if self._is_idle(path):
-            return records, end
+            return positions, records, end
         kept = _finished_count(records)
-        consumed = sum(len(line) + 1 for line in lines[:kept])
-        return records[:kept], offset + consumed
+        if kept < len(lines):
+            end = positions[kept]
+        return positions[:kept], records[:kept], end
 
     def _is_idle(self, path: str) -> bool:
         settled_before = self.settings.clock() - self.settings.settle_seconds
@@ -196,15 +236,21 @@ class _Extractor:
         # history whose compaction was already counted where it happened.
         if self.state.has_seen(message["id"]):
             return False
-        if message["id"] in self.rows_by_id:
-            self._merge(self.rows_by_id[message["id"]], message)
+        index = self.rows_by_id.get(message["id"])
+        if index is not None and not _is_empty(self.rows[index]):
+            self._merge(self.rows[index], message)
             return False
         row = _RowBuilder(record, message, self.settings).build(identity, compact)
         if row is None:
             return compact
-        self.rows.append(row)
-        self.sources.append(path)
-        self.rows_by_id[message["id"]] = row
+        if index is None:
+            self.rows_by_id[message["id"]] = len(self.rows)
+            self.rows.append(row)
+            self.sources.append(path)
+        elif not _is_empty(row):
+            # The first copy carried no counts, so this occurrence is the real turn.
+            row["tools"] = _join_tools(_tool_set(row) | _tool_set(self.rows[index]))
+            self.rows[index], self.sources[index] = row, path
         return False
 
     def _merge(self, row: dict, message: dict) -> None:
@@ -212,10 +258,21 @@ class _Extractor:
         if later is None:
             return
         later["tools"] = _join_tools(
-            set(filter(None, row["tools"].split(";")))
-            | set(filter(None, _tool_names(message, self.settings).split(";")))
+            _tool_set(row) | set(filter(None, _tool_names(message, self.settings).split(";")))
         )
         row.update(later)
+
+
+def _is_empty(row: dict) -> bool:
+    return row["context"] == "0" and row["output"] == "0"
+
+
+def _line_positions(lines: list, offset: int) -> list:
+    positions = []
+    for line in lines:
+        positions.append(offset)
+        offset += len(line) + 1
+    return positions
 
 
 def _finished_count(records: list) -> int:
@@ -242,23 +299,6 @@ def _usage_id(record):
     return message["id"] if message else None
 
 
-def _is_compact_boundary(record: dict) -> bool:
-    return record.get("type") == "system" and record.get("subtype") == "compact_boundary"
-
-
-def _usage_message(record: dict):
-    if record.get("type") != "assistant":
-        return None
-    message = record.get("message")
-    if not isinstance(message, dict) or not isinstance(message.get("usage"), dict):
-        return None
-    if not isinstance(message.get("id"), str) or not message["id"]:
-        return None
-    if message.get("model") == SYNTHETIC_MODEL:
-        return None
-    return message
-
-
 class _FileIdentity:
     def __init__(self, transcript, settings):
         self.transcript = transcript
@@ -282,14 +322,8 @@ class _FileIdentity:
     def _hash(self, value: str) -> str:
         return hash_value(self.settings.salt, value)
 
-
     def _agent_type(self) -> str:
-        agent_type = self.meta.get("agentType")
-        if not isinstance(agent_type, str) or not agent_type:
-            return ""
-        if self.settings.hash_agent_types or not guard.is_slug(agent_type):
-            return self._hash(agent_type)
-        return agent_type
+        return self.settings.names.name(self.meta.get("agentType"))
 
     def _spawn_depth(self) -> str:
         depth = self.meta.get("spawnDepth")
@@ -322,7 +356,7 @@ class _RowBuilder:
             return None
         row = {"ts": ts}
         row.update(identity)
-        row["model"] = _model_slug(self.message.get("model"), self.settings)
+        row["model"] = model_slug(self.message.get("model"), self.settings.salt)
         effort = self.record.get("effort")
         row["effort"] = effort if effort in guard.EFFORTS else ""
         row.update(usage)
@@ -355,67 +389,21 @@ def _is_count(value) -> bool:
     return is_int and 0 <= value <= guard.ROW_INT_LIMIT
 
 
-def _count(value) -> int:
-    if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
-        return value
-    return 0
-
-
-def _model_slug(model, settings) -> str:
-    """Keeps Claude model ids (minus provider prefixes and @versions); hashes the rest."""
-    if not isinstance(model, str) or not model:
-        return UNKNOWN_MODEL
-    found = CLAUDE_MODEL.search(model)
-    if found and guard.is_slug(found.group()[:64]):
-        return found.group()[:64]
-    return hash_value(settings.salt, model)
-
-
 def _tool_names(message: dict, settings) -> str:
     content = message.get("content")
     if not isinstance(content, list):
         return ""
     names = {
-        _tool_slug(item["name"], settings) for item in content
+        settings.names.tool(item["name"]) for item in content
         if isinstance(item, dict) and item.get("type") == "tool_use"
         and isinstance(item.get("name"), str) and item["name"]
     }
     return _join_tools(names)
 
 
-def _tool_slug(name: str, settings) -> str:
-    if name.startswith("mcp__"):
-        return "mcp:" + hash_value(settings.salt, name)
-    if guard.is_slug(name):
-        return name
-    return hash_value(settings.salt, name)
+def _tool_set(row: dict) -> set:
+    return set(filter(None, row["tools"].split(";")))
 
 
 def _join_tools(names) -> str:
     return ";".join(sorted(names))
-
-
-def _format_ts(value, round_to_hour: bool):
-    if not isinstance(value, str):
-        return None
-    match = TIMESTAMP.fullmatch(value)
-    if match is None:
-        return None
-    try:
-        moment = _to_utc(match)
-    except (ValueError, OverflowError):
-        return None
-    if round_to_hour:
-        moment = moment.replace(minute=0, second=0)
-    return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def _to_utc(match) -> datetime:
-    parts = [int(part) for part in match.groups()[:6]]
-    moment = datetime(*parts, tzinfo=timezone.utc)
-    zone = match.group(7)
-    if zone and zone != "Z":
-        sign = 1 if zone[0] == "+" else -1
-        hours, minutes = int(zone[1:3]), int(zone[4:6])
-        moment -= sign * timedelta(hours=hours, minutes=minutes)
-    return moment

@@ -16,13 +16,15 @@ DEFAULTS = {
     "destination": {"type": "folder", "path": "~/usage-data"},
     "round_ts_to_hour": False,
     "hash_agent_types": False,
+    "hash_names": False,
     "schedule": "18:00",
-    "crosscheck": {"command": "ccusage", "enabled": True},
+    "crosscheck": {"command": "ccusage", "enabled": True, "period": "week"},
     "weights": {"input": 1, "cache_read": 0.1, "cache_write": 2, "output": 5},
     "prices": {},
 }
 GIT_DEFAULTS = {"remote": "origin", "branch": "main", "push": True}
 TOKEN_KEYS = ("input", "cache_read", "cache_write", "output")
+CROSSCHECK_PERIODS = ("week", "month")
 
 
 class ConfigError(Exception):
@@ -63,7 +65,7 @@ def _initial_config(account, dest_type, dest, schedule) -> dict:
         destination.update(GIT_DEFAULTS)
     data = {key: copy.deepcopy(DEFAULTS[key]) for key in (
         "machine_label", "sources", "round_ts_to_hour",
-        "hash_agent_types", "crosscheck",
+        "hash_names", "crosscheck",
     )}
     data.update({
         "account": account,
@@ -116,8 +118,8 @@ def validate(data: dict) -> None:
         raise ConfigError("schedule must be HH:MM in 24 hour time")
     _validate_sources(data.get("sources"))
     _validate_destination(data.get("destination"))
-    for key in ("round_ts_to_hour", "hash_agent_types"):
-        if not isinstance(data.get(key), bool):
+    for key in ("round_ts_to_hour", "hash_agent_types", "hash_names"):
+        if not isinstance(data.get(key, DEFAULTS[key]), bool):
             raise ConfigError("%s must be true or false" % key)
     _validate_crosscheck(data.get("crosscheck", DEFAULTS["crosscheck"]))
     _validate_weights(data.get("weights", DEFAULTS["weights"]))
@@ -143,6 +145,8 @@ def _validate_crosscheck(crosscheck) -> None:
         raise ConfigError("crosscheck command must be a command name")
     if not isinstance(crosscheck.get("enabled", True), bool):
         raise ConfigError("crosscheck enabled must be true or false")
+    if crosscheck.get("period", "week") not in CROSSCHECK_PERIODS:
+        raise ConfigError("crosscheck period must be week or month")
 
 
 def _validate_weights(weights) -> None:

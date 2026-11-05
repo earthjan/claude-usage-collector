@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="384" viewBox="0 0 960 384" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="404" viewBox="0 0 960 404" role="img" aria-labelledby="title desc">
   <title id="title">Store layout</title>
-  <desc id="desc">A store has one folder per account, one CSV per UTC day, and a checks folder for monthly ccusage totals.</desc>
+  <desc id="desc">A store has one folder per account, up to four CSV files per UTC day (usage rows, context sizes, skill uses, listed names), and a checks folder for weekly ccusage totals.</desc>
   <style>
     .bg { fill: #f6f8fa; }
     .card { fill: #ffffff; stroke: #d0d7de; stroke-width: 1; }
@@ -58,32 +58,34 @@
     <marker id="m-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-purple" d="M0,0 L10,5 L0,10 z"/></marker>
     <marker id="m-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-red" d="M0,0 L10,5 L0,10 z"/></marker>
   </defs>
-  <rect class="bg" x="0" y="0" width="960" height="384" rx="16"/>
+  <rect class="bg" x="0" y="0" width="960" height="404" rx="16"/>
   <text x="24" y="40" class="h">Store layout</text>
   <text x="132" y="40" class="s">plain folders and CSV files, readable with any tool</text>
-  <rect class="card" x="24" y="64" width="420" height="296" rx="10"/>
-  <text x="48" y="96" class="mono b">usage-data/</text>
-  <text x="64" y="118" class="mono s">.gitattributes</text>
-  <text x="64" y="140" class="mono b">work/</text>
-  <text x="80" y="162" class="mono">2026/01/</text>
-  <text x="96" y="184" class="mono s">2026-01-14.csv</text>
-  <text x="96" y="206" class="mono s">2026-01-15.csv</text>
-  <text x="64" y="228" class="mono b">personal/</text>
-  <text x="80" y="250" class="mono">2026/01/</text>
-  <text x="96" y="272" class="mono s">2026-01-14.csv</text>
-  <text x="64" y="294" class="mono b">checks/</text>
-  <text x="80" y="316" class="mono s">work/&lt;machine&gt;/2025-12.json</text>
-  <text x="80" y="338" class="mono s">personal/&lt;machine&gt;/2025-12.json</text>
-  <rect class="blue" x="476" y="64" width="460" height="62" rx="10"/>
-  <text x="492" y="89" class="b">One folder per account</text>
-  <text x="492" y="109" class="s">Each machine appends only to its own account.</text>
-  <rect class="blue" x="476" y="140" width="460" height="62" rx="10"/>
-  <text x="492" y="165" class="b">One CSV per UTC day</text>
-  <text x="492" y="185" class="s">Header written once, new rows appended.</text>
-  <rect class="purple" x="476" y="216" width="460" height="62" rx="10"/>
-  <text x="492" y="241" class="b">checks/ holds ccusage totals</text>
-  <text x="492" y="261" class="s">One JSON file per account, machine and month.</text>
-  <rect class="card" x="476" y="292" width="460" height="62" rx="10"/>
-  <text x="492" y="317" class="b">Two machines, one account</text>
-  <text x="492" y="337" class="s">Rows carry a machine hash. Git merges appends.</text>
+  <rect class="card" x="24" y="64" width="420" height="316" rx="10"/>
+  <text x="48" y="92" class="mono b">usage-data/</text>
+  <text x="64" y="112" class="mono s">.gitattributes</text>
+  <text x="64" y="132" class="mono b">work/</text>
+  <text x="80" y="152" class="mono">2026/01/</text>
+  <text x="96" y="172" class="mono s">2026-01-14.csv</text>
+  <text x="96" y="192" class="mono s">2026-01-14.context.csv</text>
+  <text x="96" y="212" class="mono s">2026-01-14.skills.csv</text>
+  <text x="96" y="232" class="mono s">2026-01-14.catalog.csv</text>
+  <text x="64" y="252" class="mono b">personal/</text>
+  <text x="80" y="272" class="mono">2026/01/</text>
+  <text x="96" y="292" class="mono s">2026-01-14.csv</text>
+  <text x="64" y="312" class="mono b">checks/</text>
+  <text x="80" y="332" class="mono s">work/&lt;machine&gt;/2026-W03.json</text>
+  <text x="80" y="352" class="mono s">personal/&lt;machine&gt;/2026-W03.json</text>
+  <rect class="blue" x="476" y="64" width="460" height="66" rx="10"/>
+  <text x="492" y="91" class="b">One folder per account</text>
+  <text x="492" y="112" class="s">Each machine appends only to its own account.</text>
+  <rect class="blue" x="476" y="144" width="460" height="66" rx="10"/>
+  <text x="492" y="171" class="b">Up to four CSV files per UTC day</text>
+  <text x="492" y="192" class="s">Usage rows, context sizes, skill uses, listed names.</text>
+  <rect class="purple" x="476" y="224" width="460" height="66" rx="10"/>
+  <text x="492" y="251" class="b">checks/ holds ccusage totals</text>
+  <text x="492" y="272" class="s">One JSON file per account, machine and ISO week.</text>
+  <rect class="card" x="476" y="304" width="460" height="66" rx="10"/>
+  <text x="492" y="331" class="b">Two machines, one account</text>
+  <text x="492" y="352" class="s">Rows carry a machine hash. Git merges appends.</text>
 </svg>

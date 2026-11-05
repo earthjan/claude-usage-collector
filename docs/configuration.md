@@ -40,8 +40,8 @@ This is what `init --account work` writes (shown compactly):
   "machine_label": null,
   "sources": ["~/.claude/projects"],
   "round_ts_to_hour": false,
-  "hash_agent_types": false,
-  "crosscheck": {"command": "ccusage", "enabled": true},
+  "hash_names": false,
+  "crosscheck": {"command": "ccusage", "enabled": true, "period": "week"},
   "account": "work",
   "destination": {"type": "folder", "path": "~/usage-data"},
   "schedule": "18:00"
@@ -73,10 +73,12 @@ A git store looks like this:
 | `destination.branch` | `"main"` | Git only: branch to pull from and push to. |
 | `destination.push` | `true` | Git only: set `false` to commit locally without pushing. |
 | `round_ts_to_hour` | `false` | Round every timestamp down to the hour, to hide exact working times. |
-| `hash_agent_types` | `false` | Hash every agent type, so plugin and custom agent names are hidden. Turn it on if you define agents named after projects or clients. |
+| `hash_names` | `false` | Hash every name that would otherwise be written as is: agent types, skill names, catalog names and tool names (MCP tools are always hashed). Turn it on if you define agents or skills named after projects or clients. See [privacy.md](privacy.md#threat-model). |
+| `hash_agent_types` | `false` | The older name of `hash_names`, kept so existing configs keep working. Either key set to `true` hashes every name. Older versions hashed only agent types with it, so an existing config with it on starts hashing tool, skill and catalog names too, and per-tool figures split at the upgrade date. `init` no longer writes it. |
 | `schedule` | `"18:00"` | Daily run time in 24 hour `HH:MM`. Used by `install/install.sh`. |
-| `crosscheck.command` | `"ccusage"` | Command to run for the monthly cross-check. Can be a full path. It is pointed at this config's `sources`, which must each end in `projects`. |
-| `crosscheck.enabled` | `true` | Set `false` to skip the monthly cross-check. |
+| `crosscheck.command` | `"ccusage"` | Command to run for the cross-check. Can be a full path. It is pointed at this config's `sources`, which must each end in `projects`. |
+| `crosscheck.enabled` | `true` | Set `false` to skip the cross-check. |
+| `crosscheck.period` | `"week"` | `week` checks each completed ISO week, `month` checks each completed calendar month. Configs without this key behave as `week`. See [cross-check.md](cross-check.md#when-it-runs). |
 | `weights` | see below | Multipliers for the weighted usage figure in `analyze` and `report`. |
 | `prices` | `{}` | Dollar prices per million tokens, keyed by model prefix. Empty by default. |
 
@@ -92,8 +94,8 @@ want them. Both are explained in [analysis.md](analysis.md).
 - **Schedule:** edit `schedule`, then run `install/install.sh` again, or
   pass `install/install.sh --schedule HH:MM`. The launchd agent only picks up
   a new time on install.
-- **Privacy switches:** `round_ts_to_hour`, `hash_agent_types` and
-  `machine_label` apply to new rows only. Rows already in the store keep
+- **Privacy switches:** `round_ts_to_hour`, `hash_names` (or
+  `hash_agent_types`) and `machine_label` apply to new rows only. Rows already in the store keep
   their old form.
 - **Account label:** applies to new rows only, and they go into a new
   account folder.
@@ -137,4 +139,11 @@ but it decides how much history can be collected. Set it in
 {"cleanupPeriodDays": 365}
 ```
 
-`claude-usage doctor` warns when it is unset or below 90.
+The default 30 days is enough for the weekly cross-check, so leaving it
+unset is fine. The weekly check can catch up on a week that started up to
+21 days ago, so `claude-usage doctor` warns when the setting is below 22.
+If you set `crosscheck.period` to `"month"`, it needs 62 days or more, and
+doctor warns when it is unset or shorter. Doctor also warns when the
+setting is there but is not a whole number, or `settings.json` cannot be
+read. Keep it longer if you want older transcripts to stay collectable
+after a long break.

@@ -16,8 +16,9 @@ SVG_NAMESPACE = 'xmlns="http://www.w3.org/2000/svg"'
 FORBIDDEN_DASHES = (chr(0x2013), chr(0x2014))
 
 
-def demo_summary(config=None):
-    return analyze.summarize(analyze.load(DEMO), analyze.Meter.from_config(config))
+def demo_summary(config=None, streams=True):
+    loaded = analyze.load_streams(DEMO)[0] if streams else None
+    return analyze.summarize(analyze.load(DEMO), analyze.Meter.from_config(config), loaded)
 
 
 class RenderHtmlTest(unittest.TestCase):
@@ -36,15 +37,36 @@ class RenderHtmlTest(unittest.TestCase):
         self.assertIn("prefers-color-scheme: dark", self.html)
         self.assertIn("color-scheme: light dark", self.html)
 
-    def test_has_the_four_charts_and_kpi_tiles(self):
-        self.assertEqual(self.html.count("<svg"), 4)
+    def test_has_the_seven_charts_and_kpi_tiles(self):
+        self.assertEqual(self.html.count("<svg"), 7)
         for label in ("Effective tokens", "Turns", "Sessions", "Subagent share"):
             self.assertIn(label, self.html)
         for title in ("by day", "by model", "by agent type", "Context per turn"):
             self.assertIn(title, self.html)
 
+    def test_starting_context_cards(self):
+        for title in ("Starting context", "What a thread starts with",
+                      "Median starting context by week", "Top skills",
+                      "Listed but never used"):
+            self.assertIn(title, self.html)
+        for label in ("System prompt", "Instructions", "Memory", "Skill listing",
+                      "Agent listing", "Tools and MCP", "Hook context",
+                      "Rest of first turn", "forked or continued"):
+            self.assertIn(label, self.html)
+
+    def test_never_used_names_are_listed(self):
+        for name in ("slides", "spreadsheet", "statusline-setup"):
+            self.assertIn("<code>%s</code>" % name, self.html)
+        self.assertNotIn("<code>tdd</code>", self.html)
+
+    def test_without_stream_rows_the_new_cards_are_left_out(self):
+        html = report.render_html(demo_summary(streams=False))
+        self.assertEqual(html.count("<svg"), 4)
+        self.assertNotIn("Starting context", html)
+        self.assertNotIn("Listed but never used", html)
+
     def test_charts_have_accessible_labels_and_native_tooltips(self):
-        self.assertGreaterEqual(self.html.count('role="img"'), 4)
+        self.assertGreaterEqual(self.html.count('role="img"'), 7)
         self.assertIn("<title>", self.html)
 
     def test_tables_list_top_agents_and_sessions(self):
@@ -85,6 +107,47 @@ class DailyChartSvgTest(unittest.TestCase):
         svg = report.daily_chart_svg(days)
         self.assertEqual(svg.count('class="bar main"'), 1)
         self.assertEqual(svg.count('class="bar sub"'), 2)
+
+
+class CompositionChartTest(unittest.TestCase):
+    COMPOSITION = {
+        "main": [("system_prompt", 3000), ("instr_user", 500), ("instr_project", 700),
+                 ("instr_local", 0), ("instr_memory", 0), ("instr_other", 0),
+                 ("skill_listing", 0), ("agent_listing", 0), ("deferred_tools", 300),
+                 ("mcp", 200), ("hook_context", 0), ("rest", 5000)],
+        "sub": [("system_prompt", 1000), ("instr_user", 0), ("instr_project", 0),
+                ("instr_local", 0), ("instr_memory", 0), ("instr_other", 0),
+                ("skill_listing", 0), ("agent_listing", 0), ("deferred_tools", 0),
+                ("mcp", 0), ("hook_context", 0), ("rest", 0)],
+    }
+
+    def test_one_segment_per_non_zero_group_and_thread(self):
+        svg = report.CompositionChart(self.COMPOSITION).svg()
+        # main: system prompt, instructions, tools and MCP, rest; sub: system prompt
+        self.assertEqual(svg.count('class="seg '), 5)
+        self.assertIn("Instructions: about 1.2K tokens", svg)
+        self.assertIn("Tools and MCP: about 500 tokens", svg)
+
+    def test_segment_widths_share_one_scale(self):
+        chart = report.CompositionChart(self.COMPOSITION)
+        self.assertEqual(chart.peak, 9700)
+
+    def test_legend_names_every_group_once(self):
+        svg = report.CompositionChart(self.COMPOSITION).svg()
+        self.assertEqual(svg.count('class="legend-text"'), len(report.COMPOSITION_GROUPS))
+
+
+class TrendChartTest(unittest.TestCase):
+    def test_lines_skip_weeks_without_a_value(self):
+        weeks = [{"week": "2026-W14", "main": 1000, "sub": None},
+                 {"week": "2026-W15", "main": 3000, "sub": 7000},
+                 {"week": "2026-W16", "main": 2000, "sub": 6000}]
+        svg = report.TrendChart(weeks).svg()
+        self.assertEqual(svg.count('class="dot main"'), 3)
+        self.assertEqual(svg.count('class="dot sub"'), 2)
+        self.assertEqual(svg.count('class="line sub"'), 1)
+        self.assertIn("2026-W15: main thread 3.0K, subagents 7.0K", svg)
+        self.assertIn(">W14<", svg)
 
 
 class ReportCommandTest(unittest.TestCase):

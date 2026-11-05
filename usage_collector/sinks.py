@@ -4,9 +4,13 @@ import json
 import os
 import subprocess
 
-from . import guard
+from . import guard, periods
 
 GIT_ATTRIBUTES = "*.csv merge=union\n"
+FILE_SUFFIXES = {
+    "usage": ".csv", "context": ".context.csv",
+    "skills": ".skills.csv", "catalog": ".catalog.csv",
+}
 GIT_IDENTITY = (
     "-c", "user.name=claude-usage-collector",
     "-c", "user.email=claude-usage-collector@users.noreply.github.com",
@@ -45,14 +49,18 @@ class FolderSink:
         pass
 
     def write_rows(self, rows) -> list:
-        """Writes every day file or none, so a failed run never leaves rows a retry repeats."""
-        problems = guard.validate_rows(rows)
+        return self.write_streams({"usage": rows})
+
+    def write_streams(self, batches: dict) -> list:
+        """Writes every day file of every stream or none, so a retry never repeats rows."""
+        problems = guard.validate_streams(batches)
         if problems:
             raise GuardError(problems)
         staged = []
         try:
-            for day, day_rows in sorted(_group_by_day(rows).items()):
-                staged.append(self._stage_day(day, day_rows))
+            for stream, rows in batches.items():
+                for day, day_rows in sorted(_group_by_day(rows).items()):
+                    staged.append(self._stage_day(stream, day, day_rows))
         except OSError:
             _remove_temps(staged)
             raise
@@ -60,9 +68,10 @@ class FolderSink:
             os.replace(temp, path)
         return [path for path, _temp in staged]
 
-    def _stage_day(self, day: str, rows) -> tuple:
+    def _stage_day(self, stream: str, day: str, rows) -> tuple:
         year, month = day[:4], day[5:7]
-        path = os.path.join(self.path, self.account, year, month, day + ".csv")
+        name = day + FILE_SUFFIXES[stream]
+        path = os.path.join(self.path, self.account, year, month, name)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         temp = path + ".tmp"
         existing = _read_bytes(path)
@@ -70,22 +79,22 @@ class FolderSink:
             handle.write(existing)
         with open(temp, "a", newline="") as handle:
             writer = csv.DictWriter(
-                handle, fieldnames=guard.COLUMNS, lineterminator="\n"
+                handle, fieldnames=guard.SCHEMAS[stream].columns, lineterminator="\n"
             )
             if not existing:
                 writer.writeheader()
             writer.writerows(rows)
         return path, temp
 
-    def write_check(self, month: str, totals: dict, machine: str) -> str:
+    def write_check(self, period: str, totals: dict, machine: str) -> str:
         problems = guard.validate_check_totals(totals)
-        if not guard.is_date(month + "-01"):
-            problems.append("month is invalid")
+        if not periods.is_period(period):
+            problems.append("period is invalid")
         if not guard.is_slug(machine):
             problems.append("machine is invalid")
         if problems:
             raise GuardError(problems)
-        path = os.path.join(self.path, "checks", self.account, machine, month + ".json")
+        path = os.path.join(self.path, "checks", self.account, machine, period + ".json")
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w") as handle:
             json.dump(totals, handle, indent=2, sort_keys=True)
@@ -115,7 +124,8 @@ def _remove_temps(staged) -> None:
 def _group_by_day(rows) -> dict:
     days = {}
     for row in rows:
-        days.setdefault(row["ts"][:10], []).append(row)
+        day = row["date"] if "date" in row else row["ts"][:10]
+        days.setdefault(day, []).append(row)
     return days
 
 

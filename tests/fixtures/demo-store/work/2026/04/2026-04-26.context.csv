@@ -1,0 +1,5 @@
+ts,account,machine,project,session,agent,is_subagent,agent_type,event,system_prompt_chars,instr_user_chars,instr_project_chars,instr_local_chars,instr_memory_chars,instr_other_chars,instr_files,skill_listing_chars,skill_count,agent_listing_chars,agent_count,deferred_tools_chars,deferred_tool_count,mcp_chars,mcp_server_count,hook_context_chars,first_turn_context
+2026-04-26T09:22:44Z,work,bf8d5b88ce26,ee8e9aa3f0f8,ff1c1da6846a,,0,,start,12588,3324,6760,0,2052,0,3,3400,10,2084,6,4096,24,2816,2,808,32506
+2026-04-26T09:40:07Z,work,bf8d5b88ce26,ee8e9aa3f0f8,ff1c1da6846a,85281199cf8f,1,Explore,start,6104,3272,7892,0,0,0,2,3400,10,0,0,4500,24,2724,2,0,26901
+2026-04-26T09:40:43Z,work,bf8d5b88ce26,ee8e9aa3f0f8,ff1c1da6846a,81724b8af49b,1,fork,fork,0,0,0,0,0,0,0,0,0,0,0,716,4,0,0,476,102350
+2026-04-26T10:31:27Z,work,bf8d5b88ce26,ee8e9aa3f0f8,ff1c1da6846a,,0,,compact,0,3344,6756,0,3596,0,3,0,0,0,0,0,0,0,0,900,52019

@@ -7,7 +7,7 @@ import socket
 import sys
 from datetime import datetime, timezone
 
-from . import __version__, analyze, crosscheck, extract, guard, report
+from . import __version__, analyze, crosscheck, extract, guard, periods, report
 from . import config as config_module
 from .doctor import Doctor
 from .hashing import SaltError, load_salt
@@ -15,6 +15,9 @@ from .sinks import GuardError, SyncError, make_sink
 from .state import State, StateError
 
 SAMPLE_ROWS = 3
+STREAM_COUNTS = (
+    ("context", "context events"), ("skills", "skill uses"), ("catalog", "catalog names"),
+)
 
 
 class Context:
@@ -66,18 +69,24 @@ def cmd_collect(args, ctx) -> int:
         sink.check_ready()
     state = State.load(ctx.state_path)
     result = extract.extract(config["sources"], state, _settings(config, ctx))
-    problems = guard.validate_rows(result.rows)
+    problems = guard.validate_streams(result.streams)
     if problems:
         raise GuardError(problems, result.files_of_rejected_rows())
     if args.dry_run:
-        _print_preview(result.rows)
+        _print_preview(result.streams)
         return 0
-    written = sink.write_rows(result.rows)
+    written = sink.write_streams(result.streams)
     extract.apply(result, state, ctx.today)
     state.record_run(ctx.timestamp(), len(result.rows))
     state.save(ctx.state_path)
-    print("collected %d new rows into %d file(s)" % (len(result.rows), len(written)))
+    print("collected %d new rows, %s into %d file(s)"
+          % (len(result.rows), _stream_counts(result.streams), len(written)))
     return 0
+
+
+def _stream_counts(streams: dict) -> str:
+    return ", ".join("%d %s" % (len(streams[stream]), label)
+                     for stream, label in STREAM_COUNTS)
 
 
 def _settings(config: dict, ctx) -> extract.Settings:
@@ -87,11 +96,15 @@ def _settings(config: dict, ctx) -> extract.Settings:
         machine_label=config["machine_label"],
         round_ts_to_hour=config["round_ts_to_hour"],
         hash_agent_types=config["hash_agent_types"],
+        hash_names=config["hash_names"],
     )
 
 
-def _print_preview(rows) -> None:
+def _print_preview(streams: dict) -> None:
+    rows = streams["usage"]
     print("dry run: %d new rows, nothing written" % len(rows))
+    for stream, label in STREAM_COUNTS:
+        print("%s: %d" % (label, len(streams[stream])))
     days = {}
     for row in rows:
         days[row["ts"][:10]] = days.get(row["ts"][:10], 0) + 1
@@ -115,43 +128,57 @@ def cmd_run(args, ctx) -> int:
     code = cmd_collect(argparse.Namespace(dry_run=False), ctx)
     if code:
         return code
-    check_code = _monthly_crosscheck(ctx)
+    check_code = _scheduled_crosscheck(ctx)
     sync_code = cmd_sync(args, ctx)
     return check_code or sync_code
 
 
-def _monthly_crosscheck(ctx) -> int:
+def _scheduled_crosscheck(ctx) -> int:
     config = ctx.config()
     settings = config["crosscheck"]
-    command = settings.get("command", "ccusage")
     if not settings.get("enabled", True):
         return 0
-    if not shutil.which(command, path=ctx.environ.get("PATH")):
+    if not shutil.which(settings.get("command", "ccusage"), path=ctx.environ.get("PATH")):
         return 0
-    month = _previous_month(ctx.now)
     state = State.load(ctx.state_path)
+    if settings.get("period", "week") == "month":
+        return _monthly_crosscheck(config, state, ctx)
+    return _weekly_crosscheck(config, state, ctx)
+
+
+def _monthly_crosscheck(config: dict, state: State, ctx) -> int:
+    month = periods.previous_month(ctx.today)
     if state.crosscheck_month == month:
         return 0
-    code = crosscheck.cmd_crosscheck(
-        argparse.Namespace(month=month), config, _settings(config, ctx).machine,
-        environ=dict(ctx.environ), today=ctx.today,
-    )
+    code = _crosscheck(argparse.Namespace(month=month, week=None), config, ctx)
     if code == 0:
         state.crosscheck_month = month
         state.save(ctx.state_path)
     return code
 
 
-def _previous_month(now: datetime) -> str:
-    if now.month == 1:
-        return "%04d-12" % (now.year - 1)
-    return "%04d-%02d" % (now.year, now.month - 1)
+def _weekly_crosscheck(config: dict, state: State, ctx) -> int:
+    due, skipped = periods.due_weeks(state.crosscheck_week, ctx.today)
+    for week in skipped:
+        print("skipped cross-check for %s: it started over %d days ago, "
+              "so its transcripts may be gone" % (week, periods.MAX_AGE_DAYS))
+    for week in due:
+        code = _crosscheck(argparse.Namespace(month=None, week=week), config, ctx)
+        if code:
+            return code
+        state.crosscheck_week = week
+        state.save(ctx.state_path)
+    return 0
 
 
 def cmd_crosscheck(args, ctx) -> int:
-    config = ctx.config()
+    return _crosscheck(args, ctx.config(), ctx)
+
+
+def _crosscheck(args, config: dict, ctx) -> int:
+    settings = _settings(config, ctx)
     return crosscheck.cmd_crosscheck(
-        args, config, _settings(config, ctx).machine,
+        args, config, settings.machine, settings.salt,
         environ=dict(ctx.environ), today=ctx.today,
     )
 
@@ -198,7 +225,7 @@ def build_parser() -> argparse.ArgumentParser:
     collect = commands.add_parser("collect", help="extract new rows and write them")
     collect.add_argument("--dry-run", action="store_true", help="preview, write nothing")
     commands.add_parser("sync", help="pull, commit and push a git destination")
-    commands.add_parser("run", help="collect, monthly cross-check, then sync")
+    commands.add_parser("run", help="collect, weekly cross-check, then sync")
     _add_research_commands(commands)
     commands.add_parser("doctor", help="check the install (read only)")
     commands.add_parser("status", help="show the last run")
@@ -215,11 +242,14 @@ def _add_init(commands) -> None:
 
 
 def _add_research_commands(commands) -> None:
-    check = commands.add_parser("crosscheck", help="store ccusage totals for a month")
-    check.add_argument("--month", help="YYYY-MM (default previous month)")
+    check = commands.add_parser("crosscheck", help="store ccusage totals for a week or month")
+    check.add_argument(
+        "--week", help="YYYY-Www (default: last completed crosscheck.period)")
+    check.add_argument("--month", help="YYYY-MM")
     compare = commands.add_parser("compare", help="compare rows with ccusage totals")
     compare.add_argument("--store", help="store folder (default: config destination)")
-    compare.add_argument("--month", help="YYYY-MM (default: every checked month)")
+    compare.add_argument("--week", help="YYYY-Www (default: every checked period)")
+    compare.add_argument("--month", help="YYYY-MM (default: every checked period)")
     compare.add_argument("--tolerance", type=float, default=0.02)
     analyze_parser = commands.add_parser("analyze", help="text usage report")
     analyze_parser.add_argument("--store", help="store folder (default: config destination)")

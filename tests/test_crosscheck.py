@@ -7,6 +7,7 @@ import unittest
 from datetime import date
 
 from usage_collector import crosscheck, guard
+from usage_collector.hashing import hash_value
 from usage_collector.sinks import FolderSink
 
 from tests import support
@@ -51,26 +52,26 @@ EXPECTED = {
 
 class ReduceDailyTest(unittest.TestCase):
     def test_keeps_only_allowlisted_numbers_for_the_month(self):
-        self.assertEqual(crosscheck.reduce_daily(DAILY, "2026-02"), EXPECTED)
+        self.assertEqual(crosscheck.reduce_daily(DAILY, "2026-02", support.SALT), EXPECTED)
 
     def test_sums_repeated_models_on_one_day(self):
         entry = {"modelName": "claude-opus-5-5", "inputTokens": 1,
                  "outputTokens": 1, "cacheCreationTokens": 1, "cacheReadTokens": 1}
         data = {"daily": [{"date": "2026-02-03", "modelBreakdowns": [entry, entry]}]}
-        totals = crosscheck.reduce_daily(data, "2026-02")
+        totals = crosscheck.reduce_daily(data, "2026-02", support.SALT)
         self.assertEqual(totals["2026-02-03"]["claude-opus-5-5"]["input"], 2)
 
     def test_missing_or_bad_numbers_count_as_zero(self):
         entry = {"modelName": "claude-opus-5-5", "inputTokens": "12",
                  "outputTokens": True, "cacheReadTokens": -3}
         data = {"daily": [{"date": "2026-02-03", "modelBreakdowns": [entry]}]}
-        counts = crosscheck.reduce_daily(data, "2026-02")["2026-02-03"]["claude-opus-5-5"]
+        counts = crosscheck.reduce_daily(data, "2026-02", support.SALT)["2026-02-03"]["claude-opus-5-5"]
         self.assertEqual(counts, {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0})
 
     def test_non_object_input_gives_no_totals(self):
         for data in ([], "text", {"daily": "text"}, None):
             with self.subTest(data=data):
-                self.assertEqual(crosscheck.reduce_daily(data, "2026-02"), {})
+                self.assertEqual(crosscheck.reduce_daily(data, "2026-02", support.SALT), {})
 
 
 class MonthTest(unittest.TestCase):
@@ -114,13 +115,13 @@ class CrosscheckCommandTest(unittest.TestCase):
             )
         os.chmod(script, 0o755)
 
-    def run_check(self, month="2026-02", today=date(2026, 3, 10)):
+    def run_check(self, month="2026-02", today=date(2026, 3, 10), week=None):
         out, err = io.StringIO(), io.StringIO()
-        args = argparse.Namespace(month=month)
+        args = argparse.Namespace(month=month, week=week)
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             code = crosscheck.cmd_crosscheck(
                 args, self.config, environ=self.environ, today=today,
-                machine="laptop-1",
+                machine="laptop-1", salt=support.SALT,
             )
         return code, out.getvalue(), err.getvalue()
 
@@ -162,20 +163,62 @@ class CrosscheckCommandTest(unittest.TestCase):
         self.assertIn("projects", err)
         self.assertFalse(os.path.exists(self.check_file()))
 
-    def test_defaults_to_previous_month(self):
+    def test_month_period_defaults_to_previous_month(self):
+        self.config["crosscheck"]["period"] = "month"
         self.fake_ccusage(json.dumps({"daily": []}))
         code, _out, _err = self.run_check(month=None, today=date(2026, 1, 3))
         self.assertEqual(code, 0)
         self.assertTrue(os.path.exists(self.check_file("2025-12")))
 
-    def test_free_text_model_fails_closed_without_echoing_it(self):
+    def test_defaults_to_the_last_completed_week(self):
+        self.fake_ccusage(json.dumps({"daily": []}))
+        code, _out, err = self.run_check(month=None, today=date(2026, 3, 4))
+        self.assertEqual(code, 0, err)
+        self.assertTrue(os.path.exists(self.check_file("2026-W09")))
+
+    def test_week_asks_ccusage_for_monday_to_sunday_and_keeps_only_those_days(self):
+        day = {"modelName": "claude-opus-5-5", "inputTokens": 1, "outputTokens": 1,
+               "cacheCreationTokens": 1, "cacheReadTokens": 1}
+        data = {"daily": [{"date": d, "modelBreakdowns": [day]}
+                          for d in ("2026-02-22", "2026-02-23", "2026-03-01", "2026-03-02")]}
+        self.fake_ccusage(json.dumps(data))
+        code, _out, err = self.run_check(month=None, week="2026-W09")
+        self.assertEqual(code, 0, err)
+        with open(self.argv_log) as handle:
+            argv = handle.read().split()
+        self.assertEqual(argv[3:6], ["20260223", "--until", "20260301"])
+        with open(self.check_file("2026-W09")) as handle:
+            self.assertEqual(sorted(json.load(handle)), ["2026-02-23", "2026-03-01"])
+
+    def test_rejects_bad_week_and_both_flags(self):
+        self.fake_ccusage(json.dumps(DAILY))
+        code, _out, err = self.run_check(month=None, week="2026-W60")
+        self.assertEqual(code, 1)
+        self.assertIn("YYYY-Www", err)
+        code, _out, err = self.run_check(month="2026-02", week="2026-W09")
+        self.assertEqual(code, 1)
+        self.assertIn("not both", err)
+
+    def test_non_claude_model_name_is_hashed_and_never_written(self):
         data = {"daily": [{"date": "2026-02-03", "modelBreakdowns": [
-            {"modelName": "my secret prompt", "inputTokens": 1}]}]}
+            {"modelName": "my secret prompt", "inputTokens": 1},
+            {"modelName": "acme-private-finetune-v2", "inputTokens": 1}]}]}
         self.fake_ccusage(json.dumps(data))
         code, out, err = self.run_check()
+        self.assertEqual(code, 0, err)
+        stored = support.read_all_bytes(self.store)
+        for secret in ("secret", "acme"):
+            self.assertNotIn(secret.encode(), stored)
+            self.assertNotIn(secret, out + err)
+
+    def test_out_of_range_total_fails_closed(self):
+        data = {"daily": [{"date": "2026-02-03", "modelBreakdowns": [
+            {"modelName": "claude-opus-5-5", "inputTokens": 10 ** 14}]}]}
+        self.fake_ccusage(json.dumps(data))
+        code, _out, err = self.run_check()
         self.assertEqual(code, 1)
+        self.assertIn("guard", err)
         self.assertFalse(os.path.exists(self.check_file()))
-        self.assertNotIn("secret", out + err)
 
     def test_failing_or_garbled_ccusage_writes_nothing(self):
         for stdout, status in (("{}", 3), ("not json", 0)):
@@ -227,8 +270,10 @@ class CompareCommandTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def compare(self, month=None, tolerance=0.02, config=None):
-        args = argparse.Namespace(store=self.store, month=month, tolerance=tolerance)
+    def compare(self, month=None, tolerance=0.02, config=None, week=None):
+        args = argparse.Namespace(
+            store=self.store, month=month, week=week, tolerance=tolerance,
+        )
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             code = crosscheck.cmd_compare(args, config)
@@ -239,8 +284,8 @@ class CompareCommandTest(unittest.TestCase):
         counts.update(changes)
         return counts
 
-    def write_check(self, opus, machine="laptop-1"):
-        self.sink.write_check("2026-02", {"2026-02-03": {
+    def write_check(self, opus, machine="laptop-1", period="2026-02"):
+        self.sink.write_check(period, {"2026-02-03": {
             "claude-opus-5-5": opus,
             "claude-haiku-4-5": {"input": 1, "output": 2, "cache_write": 3, "cache_read": 4},
         }}, machine)
@@ -295,6 +340,35 @@ class CompareCommandTest(unittest.TestCase):
         code, _out, err = self.compare(month="2026-01")
         self.assertEqual(code, 1)
         self.assertIn("no cross-check", err)
+
+    def test_week_check_sums_only_rows_inside_the_week(self):
+        self.sink.write_rows([row("2026-02-09T10:00:00Z", "claude-opus-5-5")])
+        self.write_check(self.opus(), period="2026-W06")
+        code, out, err = self.compare(week="2026-W06")
+        self.assertEqual(code, 0, out + err)
+        self.assertIn("compared 2 day/model pair(s), 0 gap(s)", out)
+
+    def test_weekly_and_monthly_files_are_both_compared(self):
+        self.write_check(self.opus(), period="2026-W06")
+        self.write_check(self.opus(output=50), period="2026-02")
+        code, out, _err = self.compare()
+        self.assertEqual(code, 1)
+        self.assertIn("compared 4 day/model pair(s), 1 gap(s)", out)
+        self.assertEqual(self.compare(week="2026-W06")[0], 0)
+
+    def test_bad_week_filter_is_an_error(self):
+        self.write_check(self.opus(), period="2026-W06")
+        code, _out, err = self.compare(week="2026-W6")
+        self.assertEqual(code, 1)
+        self.assertIn("YYYY-Www", err)
+
+    def test_check_file_with_an_unknown_name_is_ignored(self):
+        self.write_check(self.opus(), period="2026-W06")
+        stray = os.path.join(self.store, "checks", "work", "laptop-1", "notes.json")
+        with open(stray, "w") as handle:
+            json.dump({"2026-02-03": {"claude-opus-5-5": self.opus(output=1)}}, handle)
+        code, out, err = self.compare()
+        self.assertEqual(code, 0, out + err)
 
     def test_store_comes_from_config_when_not_given(self):
         self.write_check(self.opus())

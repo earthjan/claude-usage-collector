@@ -1,0 +1,7 @@
+ts,account,machine,project,session,agent,is_subagent,agent_type,event,system_prompt_chars,instr_user_chars,instr_project_chars,instr_local_chars,instr_memory_chars,instr_other_chars,instr_files,skill_listing_chars,skill_count,agent_listing_chars,agent_count,deferred_tools_chars,deferred_tool_count,mcp_chars,mcp_server_count,hook_context_chars,first_turn_context
+2026-04-11T13:17:49Z,personal,188f4f5a14d2,9f5834984ba2,3a948cf90081,,0,,start,10624,3944,7372,0,1436,0,3,2720,8,2096,6,4244,24,3004,2,928,35268
+2026-04-11T13:26:25Z,personal,188f4f5a14d2,9f5834984ba2,3a948cf90081,bca3aae565e5,1,Explore,start,5108,3804,6496,0,0,0,2,2720,8,0,0,4136,24,2600,2,0,27078
+2026-04-11T16:18:44Z,personal,188f4f5a14d2,9f5834984ba2,cb484345126f,,0,,start,10472,3900,6580,0,2052,0,3,2720,8,1884,6,4068,24,2816,2,888,26337
+2026-04-11T16:24:02Z,personal,188f4f5a14d2,9f5834984ba2,cb484345126f,043f454a924f,1,Explore,start,5988,3944,6872,0,0,0,2,2720,8,0,0,4748,24,2556,2,0,18146
+2026-04-11T16:53:25Z,personal,188f4f5a14d2,9f5834984ba2,cb484345126f,d1f391bf4d96,1,fork,fork,0,0,0,0,0,0,0,0,0,0,0,756,4,0,0,520,160034
+2026-04-11T16:56:06Z,personal,188f4f5a14d2,9f5834984ba2,cb484345126f,f1685d706011,1,fork,fork,0,0,0,0,0,0,0,0,0,0,0,716,4,0,0,436,124105

@@ -113,7 +113,7 @@ claude-usage --config ~/.config/claude-usage-collector-personal/config.json \
 Then edit `sources` in each config to point at the right `projects` folder.
 Each config folder has its own salt and its own read positions.
 
-The monthly cross-check follows `sources` too. It runs `ccusage` with
+The cross-check follows `sources` too. It runs `ccusage` with
 `CLAUDE_CONFIG_DIR` set to the folder that holds each `projects` source, so
 each config's check totals cover only that account's transcripts. Keep each
 source path ending in `projects` (for example

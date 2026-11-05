@@ -2,7 +2,7 @@
 
 **`ccusage` reads the same transcripts in its own way, so its daily totals
 are an independent check on the collector.** It is pointed at the folders
-in your config's `sources`, so it sees the same files the collector reads. Once a month the collector
+in your config's `sources`, so it sees the same files the collector reads. Once a week the collector
 stores those totals next to the rows. `compare` then sums the rows the same
 way and shows any gap.
 
@@ -34,7 +34,8 @@ CLAUDE_CONFIG_DIR=<folder holding each projects source> \
   ccusage daily --json --since YYYYMMDD --until YYYYMMDD --timezone UTC
 ```
 
-for one calendar month. It never runs the `ccusage session` report, which
+for one ISO week (Monday to Sunday, in UTC), or for one calendar month
+when you ask for a month. It never runs the `ccusage session` report, which
 includes project paths.
 
 - `CLAUDE_CONFIG_DIR` is the parent of each folder in `sources`, joined
@@ -49,53 +50,76 @@ includes project paths.
 From the JSON it keeps, per day and per model, only four integers: input,
 output, cache read and cache write tokens. Costs, project names and any
 other field are dropped. The result goes through the same fail-closed guard
-as rows, then into `checks/<account>/<machine>/YYYY-MM.json` in the store.
+as rows, then into `checks/<account>/<machine>/YYYY-Www.json` in the store
+(for example `2026-W09.json`). A month check goes into `YYYY-MM.json`
+beside it, and month files written by older versions keep being read.
 Each machine has its own file, so two machines sharing one account label
 never edit the same file, and `compare` adds their totals up. The format
 is in [schema.md](schema.md#cross-check-totals).
 
 ## When it runs
 
-- **Automatically,** as part of `claude-usage run`, for the previous UTC
-  month, until that month has been stored once. Because both the rows and
-  `ccusage` use UTC days, the month is complete as soon as it is over in
-  UTC, even if it is still the last evening of the month on your clock. A machine that was asleep on the
-  first of the month catches up on its next run. It runs between collect
-  and sync, so the totals are pushed in the same run.
-- **By hand,** for any month:
+- **Automatically,** as part of `claude-usage run`, for the most recent
+  completed ISO week, until that week has been stored once. Because both
+  the rows and `ccusage` use UTC days, the week is complete as soon as
+  Sunday is over in UTC, even if it is still Sunday evening on your clock.
+  It runs between collect and sync, so the totals are pushed in the same
+  run.
+- **Catching up:** a machine that was off for a while checks every week it
+  missed on its next run, oldest first. A week that started more than 21
+  days ago is skipped instead, and the run log says so, because its
+  transcripts may already be deleted and the totals would be low.
+- **By hand,** for any week or month:
 
 ```sh
-claude-usage crosscheck                  # the previous month
+claude-usage crosscheck                    # the last completed week
+claude-usage crosscheck --week 2026-W09
 claude-usage crosscheck --month 2025-12
 ```
 
 The automatic run is skipped quietly when `crosscheck.enabled` is `false`
 or the command is not on `PATH`. Set `crosscheck.command` to a full path if
-`ccusage` lives somewhere the schedule cannot see.
+`ccusage` lives somewhere the schedule cannot see. To go back to the older
+monthly schedule, set `crosscheck.period` to `"month"`. The run then checks
+the previous UTC month once, and `crosscheck` without a flag does the same.
 
-`ccusage` only sees transcripts that still exist. Run the cross-check before
-Claude Code's `cleanupPeriodDays` removes a month's files, or the totals
-will be low.
+### Why weekly: transcript retention
+
+`ccusage` only sees transcripts that still exist, and Claude Code deletes
+them after `cleanupPeriodDays` (30 days by default). A monthly check run on
+the first of the month needs the files from up to 31 days back, so with the
+default setting the first days of the month were already gone and the
+totals came out low. A weekly check needs files from at most about 13 days
+back, plus up to 21 days when it catches up after a break: the oldest week
+it still checks starts 21 days ago. The default 30 days covers that, so you
+no longer need to raise `cleanupPeriodDays` for the cross-check.
+`claude-usage doctor` warns when it is set below 22, the shortest period
+that still keeps the oldest day a catch-up reads. If you set
+`crosscheck.period` to `"month"`, keep it at 62 days or more. Doctor then
+warns below 62, and also when the setting is unset.
 
 ## Comparing
 
 ```sh
-claude-usage compare --store ~/usage-data --month 2025-12
+claude-usage compare --store ~/usage-data --week 2026-W09
 claude-usage compare --store ~/usage-data --month 2025-12 --tolerance 0.05
 ```
 
 For each account, day and model, `compare` sums the rows and sets them
-against the stored totals, one token kind at a time. Without `--month` it
-checks every month that has a check file. `--store` defaults to the
-destination in your config. It prints a table of the gaps and exits non-zero
-if any gap is larger than the tolerance. The default tolerance is `0.02`,
+against the stored totals, one token kind at a time. Each check file is
+compared on its own, against the rows of its own week or month. `--week`
+and `--month` pick one file by its name, so `--month` finds month files
+only. Without either it checks every week and month that has a check
+file. `--store` defaults to the destination in your config. It prints a
+table of the gaps and exits non-zero if any gap is larger than the
+tolerance. The default tolerance is `0.02`,
 which means 2 percent.
 
 ## Reading a gap
 
 Small gaps are normal. Larger ones usually have a plain cause:
 
-- **Rows below the totals for the last days of a month:** the month was
+- **Rows below the totals for the last days of a week or month:** it was
   checked before the collector caught up. Run `collect`, then compare again.
 - **Rows below the totals across a whole day:** a run was blocked by the
   guard, or transcripts were deleted before collection. Run

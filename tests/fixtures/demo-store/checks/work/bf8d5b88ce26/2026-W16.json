@@ -1,0 +1,106 @@
+{
+  "2026-04-13": {
+    "claude-haiku-4-5": {
+      "cache_read": 114925,
+      "cache_write": 24606,
+      "input": 161,
+      "output": 2190
+    },
+    "claude-opus-5-5": {
+      "cache_read": 2354085,
+      "cache_write": 214239,
+      "input": 741,
+      "output": 30300
+    },
+    "claude-sonnet-5-5": {
+      "cache_read": 1157131,
+      "cache_write": 117727,
+      "input": 772,
+      "output": 10188
+    }
+  },
+  "2026-04-14": {
+    "claude-haiku-4-5": {
+      "cache_read": 7630046,
+      "cache_write": 661120,
+      "input": 2535,
+      "output": 76976
+    },
+    "claude-opus-5-5": {
+      "cache_read": 2118379,
+      "cache_write": 230695,
+      "input": 752,
+      "output": 22209
+    },
+    "claude-sonnet-5-5": {
+      "cache_read": 3386843,
+      "cache_write": 507105,
+      "input": 1874,
+      "output": 46649
+    }
+  },
+  "2026-04-15": {
+    "claude-sonnet-5-5": {
+      "cache_read": 12256048,
+      "cache_write": 801648,
+      "input": 3296,
+      "output": 88042
+    }
+  },
+  "2026-04-16": {
+    "claude-haiku-4-5": {
+      "cache_read": 2124022,
+      "cache_write": 268935,
+      "input": 1053,
+      "output": 28678
+    },
+    "claude-opus-5-5": {
+      "cache_read": 2472951,
+      "cache_write": 274435,
+      "input": 1137,
+      "output": 26417
+    },
+    "claude-sonnet-5-5": {
+      "cache_read": 7443493,
+      "cache_write": 696697,
+      "input": 2739,
+      "output": 73703
+    }
+  },
+  "2026-04-17": {
+    "claude-haiku-4-5": {
+      "cache_read": 4627720,
+      "cache_write": 350193,
+      "input": 1228,
+      "output": 32865
+    },
+    "claude-opus-5-5": {
+      "cache_read": 12722400,
+      "cache_write": 849188,
+      "input": 3656,
+      "output": 83084
+    },
+    "claude-sonnet-5-5": {
+      "cache_read": 426484,
+      "cache_write": 95762,
+      "input": 314,
+      "output": 6801
+    }
+  },
+  "2026-04-18": {
+    "claude-sonnet-5-5": {
+      "cache_read": 2227439,
+      "cache_write": 220897,
+      "input": 755,
+      "output": 19000
+    }
+  },
+  "2026-04-19": {
+    "claude-sonnet-5-5": {
+      "cache_read": 2681389,
+      "cache_write": 238495,
+      "input": 991,
+      "output": 25380
+    }
+  }
+}

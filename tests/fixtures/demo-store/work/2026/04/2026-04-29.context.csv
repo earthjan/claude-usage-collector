@@ -1,0 +1,6 @@
+ts,account,machine,project,session,agent,is_subagent,agent_type,event,system_prompt_chars,instr_user_chars,instr_project_chars,instr_local_chars,instr_memory_chars,instr_other_chars,instr_files,skill_listing_chars,skill_count,agent_listing_chars,agent_count,deferred_tools_chars,deferred_tool_count,mcp_chars,mcp_server_count,hook_context_chars,first_turn_context
+2026-04-29T07:26:00Z,work,bf8d5b88ce26,011dfbd8f5f6,5f56983fe358,,0,,start,12100,3840,7800,0,3216,0,3,3400,10,2004,6,4744,24,2896,2,844,27461
+2026-04-29T07:36:27Z,work,bf8d5b88ce26,011dfbd8f5f6,5f56983fe358,d2277c99cf28,1,Explore,start,5496,3612,7384,0,0,0,2,3400,10,0,0,4288,24,3056,2,0,22162
+2026-04-29T12:21:30Z,work,bf8d5b88ce26,011dfbd8f5f6,1a40a5b8c2ce,,0,,start,12064,3384,7000,0,2392,0,3,3400,10,2104,6,3976,24,2588,2,940,33368
+2026-04-29T18:19:23Z,work,bf8d5b88ce26,ee8e9aa3f0f8,dd9985d09bf2,,0,,start,12300,3596,7208,0,4212,0,3,3400,10,2100,6,4204,24,2824,2,956,28115
+2026-04-29T19:41:08Z,work,bf8d5b88ce26,ee8e9aa3f0f8,dd9985d09bf2,,0,,compact,0,3920,7872,0,3804,0,3,0,0,0,0,0,0,0,0,908,56703

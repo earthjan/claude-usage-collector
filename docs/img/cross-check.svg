@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="300" viewBox="0 0 960 300" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="372" viewBox="0 0 960 372" role="img" aria-labelledby="title desc">
   <title id="title">Cross-check flow</title>
-  <desc id="desc">The collector and ccusage read the same transcripts independently. compare sums rows per day and model and checks them against ccusage totals.</desc>
+  <desc id="desc">The collector and ccusage read the same transcripts independently, once a week. compare sums usage rows per day and model and checks them against the ccusage totals. Context sizes, the third reader, feed analyze and report and are not compared.</desc>
   <style>
     .bg { fill: #f6f8fa; }
     .card { fill: #ffffff; stroke: #d0d7de; stroke-width: 1; }
@@ -58,45 +58,52 @@
     <marker id="m-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-purple" d="M0,0 L10,5 L0,10 z"/></marker>
     <marker id="m-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="a-red" d="M0,0 L10,5 L0,10 z"/></marker>
   </defs>
-  <rect class="bg" x="0" y="0" width="960" height="300" rx="16"/>
+  <rect class="bg" x="0" y="0" width="960" height="372" rx="16"/>
   <text x="24" y="40" class="h">Cross-check</text>
-  <text x="130" y="40" class="s">two independent readings of the same transcripts</text>
-  <rect class="card" x="24" y="68" width="200" height="80" rx="10"/>
-  <text x="40" y="94" class="b">Transcripts</text>
-  <text x="40" y="113" class="s">~/.claude/projects</text>
-  <path class="line-blue" d="M224,108 L262,108" marker-end="url(#m-blue)"/>
-  <rect class="blue" x="264" y="68" width="200" height="80" rx="10"/>
-  <text x="280" y="94" class="b">collect</text>
-  <text x="280" y="113" class="s">one row per message</text>
-  <path class="line-blue" d="M464,108 L502,108" marker-end="url(#m-blue)"/>
-  <rect class="blue" x="504" y="68" width="200" height="80" rx="10"/>
-  <text x="520" y="94" class="b">Usage rows</text>
-  <text x="520" y="113" class="s">&lt;account&gt;/YYYY/MM/</text>
-  <text x="520" y="132" class="s">YYYY-MM-DD.csv</text>
-  <rect class="purple" x="24" y="196" width="200" height="80" rx="10"/>
-  <text x="40" y="222" class="b">ccusage</text>
-  <text x="40" y="241" class="s">daily --json</text>
-  <text x="40" y="260" class="s">for one month</text>
-  <path class="line-purple" d="M224,236 L262,236" marker-end="url(#m-purple)"/>
-  <rect class="purple" x="264" y="196" width="200" height="80" rx="10"/>
-  <text x="280" y="222" class="b">crosscheck</text>
-  <text x="280" y="241" class="s">4 totals per model</text>
-  <text x="280" y="260" class="s">per day, guarded</text>
-  <path class="line-purple" d="M464,236 L502,236" marker-end="url(#m-purple)"/>
-  <rect class="purple" x="504" y="196" width="200" height="80" rx="10"/>
-  <text x="520" y="222" class="b">Check totals</text>
-  <text x="520" y="241" class="s">checks/&lt;account&gt;/</text>
-  <text x="520" y="260" class="s">&lt;machine&gt;/YYYY-MM.json</text>
-  <path class="line" d="M124,148 L124,194" marker-end="url(#m-grey)"/>
-  <text x="134" y="176" class="s">reads the same files</text>
-  <rect class="card" x="744" y="68" width="192" height="208" rx="10"/>
-  <text x="760" y="98" class="h">compare</text>
-  <text x="760" y="136" class="s">sum rows by</text>
-  <text x="760" y="155" class="s">day and model,</text>
-  <text x="760" y="174" class="s">set against</text>
-  <text x="760" y="193" class="s">check totals</text>
-  <text x="760" y="231" class="s">gap over tolerance:</text>
-  <text x="760" y="250" class="b">exit 1</text>
-  <path class="line-blue" d="M704,108 L742,108" marker-end="url(#m-blue)"/>
-  <path class="line-purple" d="M704,236 L742,236" marker-end="url(#m-purple)"/>
+  <text x="130" y="40" class="s">independent readings of the same transcripts, checked against each other</text>
+  <rect class="card" x="24" y="68" width="168" height="280" rx="10"/>
+  <text x="40" y="200" class="b">Transcripts</text>
+  <text x="40" y="219" class="s">~/.claude/projects</text>
+  <path class="line-blue" d="M192,108 L230,108" marker-end="url(#m-blue)"/>
+  <rect class="blue" x="232" y="68" width="180" height="80" rx="10"/>
+  <text x="248" y="94" class="b">collect</text>
+  <text x="248" y="113" class="s">one row per message</text>
+  <path class="line-blue" d="M412,108 L438,108" marker-end="url(#m-blue)"/>
+  <rect class="blue" x="440" y="68" width="200" height="80" rx="10"/>
+  <text x="456" y="94" class="b">Usage rows</text>
+  <text x="456" y="113" class="s">&lt;account&gt;/YYYY/MM/</text>
+  <text x="456" y="132" class="s">YYYY-MM-DD.csv</text>
+  <path class="line-blue" d="M640,108 L678,108" marker-end="url(#m-blue)"/>
+  <path class="line-purple" d="M192,208 L230,208" marker-end="url(#m-purple)"/>
+  <rect class="purple" x="232" y="168" width="180" height="80" rx="10"/>
+  <text x="248" y="194" class="b">crosscheck</text>
+  <text x="248" y="213" class="s">ccusage daily --json</text>
+  <text x="248" y="232" class="s">one ISO week, guarded</text>
+  <path class="line-purple" d="M412,208 L438,208" marker-end="url(#m-purple)"/>
+  <rect class="purple" x="440" y="168" width="200" height="80" rx="10"/>
+  <text x="456" y="194" class="b">Check totals</text>
+  <text x="456" y="213" class="s">checks/&lt;account&gt;/</text>
+  <text x="456" y="232" class="s">&lt;machine&gt;/YYYY-Www.json</text>
+  <path class="line-purple" d="M640,208 L678,208" marker-end="url(#m-purple)"/>
+  <path class="line" d="M192,308 L230,308" marker-end="url(#m-grey)"/>
+  <rect class="green" x="232" y="268" width="180" height="80" rx="10"/>
+  <text x="248" y="294" class="b">collect</text>
+  <text x="248" y="313" class="s">one row per context</text>
+  <path class="line" d="M412,308 L438,308" marker-end="url(#m-grey)"/>
+  <rect class="green" x="440" y="268" width="200" height="80" rx="10"/>
+  <text x="456" y="294" class="b">Context sizes</text>
+  <text x="456" y="313" class="s">&lt;account&gt;/YYYY/MM/</text>
+  <text x="456" y="332" class="s">YYYY-MM-DD.context.csv</text>
+  <path class="line" d="M640,308 L678,308" marker-end="url(#m-grey)"/>
+  <rect class="card" x="680" y="68" width="256" height="180" rx="10"/>
+  <text x="696" y="98" class="h">compare</text>
+  <text x="696" y="130" class="s">sum rows by day and model,</text>
+  <text x="696" y="149" class="s">set against check totals</text>
+  <text x="696" y="168" class="s">of each week or month</text>
+  <text x="696" y="206" class="s">gap over tolerance:</text>
+  <text x="696" y="225" class="b">exit 1</text>
+  <rect class="card" x="680" y="268" width="256" height="80" rx="10"/>
+  <text x="696" y="294" class="b">analyze, report</text>
+  <text x="696" y="313" class="s">starting context and parts,</text>
+  <text x="696" y="332" class="s">not part of compare</text>
 </svg>
